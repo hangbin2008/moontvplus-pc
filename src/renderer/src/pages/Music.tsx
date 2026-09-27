@@ -120,6 +120,9 @@ export default function Music() {
           currentSong={currentSong}
           isPlaying={player.isPlaying}
           onPlaySong={player.handlePlaySong}
+          hasMore={search.hasMore}
+          loadingMore={search.loadingMore}
+          onLoadMore={() => void search.loadMore()}
         />
 
         {/* 右侧:歌词 */}

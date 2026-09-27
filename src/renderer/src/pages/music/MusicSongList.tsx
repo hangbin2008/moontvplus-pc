@@ -19,6 +19,10 @@ interface MusicSongListProps {
   currentSong: MusicSong | undefined
   isPlaying: boolean
   onPlaySong: (song: MusicSong, index: number, list: MusicSong[]) => void
+  /** 搜索分页:还有下一页时列表底部显示"加载更多" */
+  hasMore?: boolean
+  loadingMore?: boolean
+  onLoadMore?: () => void
 }
 
 export default function MusicSongList({
@@ -33,7 +37,10 @@ export default function MusicSongList({
   boardCount,
   currentSong,
   isPlaying,
-  onPlaySong
+  onPlaySong,
+  hasMore,
+  loadingMore,
+  onLoadMore
 }: MusicSongListProps) {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -141,6 +148,19 @@ export default function MusicSongList({
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {/* 搜索结果加载更多(分页) */}
+        {isSearchMode && displayList.length > 0 && hasMore && (
+          <div className="px-6 py-3 text-center">
+            <button
+              onClick={onLoadMore}
+              disabled={loadingMore}
+              className="px-4 py-1.5 text-xs rounded-md border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-overlay)] transition-colors disabled:opacity-60"
+            >
+              {loadingMore ? '加载中...' : '加载更多'}
+            </button>
           </div>
         )}
       </div>

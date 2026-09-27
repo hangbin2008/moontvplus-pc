@@ -6,6 +6,8 @@ import { searchMusic, type MusicSong } from '../../lib/music'
 
 const HISTORY_KEY = 'music_search_history'
 const HISTORY_LIMIT = 10
+/** lxserver 搜索单页固定返回 20 条,按页翻页追加 */
+const PAGE_SIZE = 20
 
 /** 读取本地搜索历史(最新在前) */
 function loadHistory(): string[] {
@@ -24,6 +26,9 @@ export function useMusicSearch(source: string, onSearchStart: () => void) {
   const [searchResults, setSearchResults] = useState<MusicSong[]>([])
   const [searching, setSearching] = useState(false)
   const [history, setHistory] = useState<string[]>(loadHistory)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
 
   useEffect(() => {
     try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)) } catch {}
@@ -38,19 +43,44 @@ export function useMusicSearch(source: string, onSearchStart: () => void) {
   }
   const clearHistory = () => setHistory([])
 
-  /* ============ 搜索(可显式指定源,供切源后重新搜索) ============ */
+  /* ============ 搜索(可显式指定源,供切源后重新搜索;首页重置分页) ============ */
   const searchWith = async (q: string, src: string) => {
     if (!q) return
     onSearchStart()
     setSubmittedKeyword(q)
     setSearching(true)
+    setPage(1)
+    setHasMore(false)
     try {
-      const res = await searchMusic(q, src, 1, 50)
+      const res = await searchMusic(q, src, 1, PAGE_SIZE)
       setSearchResults(res.list || [])
+      setHasMore((res.list || []).length >= PAGE_SIZE)
     } catch {
       setSearchResults([])
     } finally {
       setSearching(false)
+    }
+  }
+
+  /* ============ 加载更多:下一页追加(按 songId 去重) ============ */
+  const loadMore = async () => {
+    const q = submittedKeyword
+    if (!q || !hasMore || searching || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const next = page + 1
+      const res = await searchMusic(q, source, next, PAGE_SIZE)
+      const list = res.list || []
+      setSearchResults((prev) => {
+        const seen = new Set(prev.map((s) => s.songId))
+        return [...prev, ...list.filter((s) => !seen.has(s.songId))]
+      })
+      setPage(next)
+      setHasMore(list.length >= PAGE_SIZE)
+    } catch {
+      setHasMore(false)
+    } finally {
+      setLoadingMore(false)
     }
   }
 
@@ -76,6 +106,9 @@ export function useMusicSearch(source: string, onSearchStart: () => void) {
     searching,
     handleSearch,
     searchWith,
+    loadMore,
+    hasMore,
+    loadingMore,
     clearSearch,
     history,
     removeHistory,
