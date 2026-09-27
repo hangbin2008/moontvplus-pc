@@ -54,7 +54,8 @@ export function useMusicSearch(source: string, onSearchStart: () => void) {
     try {
       const res = await searchMusic(q, src, 1, PAGE_SIZE)
       setSearchResults(res.list || [])
-      setHasMore((res.list || []).length >= PAGE_SIZE)
+      // 服务器模式返回精确 hasMore;lxserver 无该字段时按"满页即有下一页"推断
+      setHasMore(typeof res.hasMore === 'boolean' ? res.hasMore : (res.list || []).length >= PAGE_SIZE)
     } catch {
       setSearchResults([])
     } finally {
@@ -76,7 +77,7 @@ export function useMusicSearch(source: string, onSearchStart: () => void) {
         return [...prev, ...list.filter((s) => !seen.has(s.songId))]
       })
       setPage(next)
-      setHasMore(list.length >= PAGE_SIZE)
+      setHasMore(typeof res.hasMore === 'boolean' ? res.hasMore : list.length >= PAGE_SIZE)
     } catch {
       setHasMore(false)
     } finally {
