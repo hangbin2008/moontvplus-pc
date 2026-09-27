@@ -55,8 +55,18 @@ export default function Music() {
   const handleSourceChange = (id: string) => {
     if (id === source) return
     setSource(id)
-    // 切源后回到榜单模式,清空搜索
-    search.clearSearch()
+    // 保留搜索关键词:有已提交的搜索则用新源自动重新搜索,否则回到榜单模式
+    if (search.submittedKeyword) {
+      void search.searchWith(search.submittedKeyword, id)
+    } else {
+      search.clearSearch()
+    }
+  }
+
+  /* ============ 搜索历史点击 ============ */
+  const handleHistorySelect = (q: string) => {
+    search.setKeyword(q)
+    void search.searchWith(q, source)
   }
 
   /* ============ 派生值 ============ */
@@ -76,6 +86,10 @@ export default function Music() {
         onClearSearch={search.clearSearch}
         source={source}
         onSourceChange={handleSourceChange}
+        history={search.history}
+        onHistorySelect={handleHistorySelect}
+        onHistoryRemove={search.removeHistory}
+        onHistoryClear={search.clearHistory}
       />
 
       {/* ============ 榜单/历史标签(非搜索模式) ============ */}

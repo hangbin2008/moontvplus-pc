@@ -24,6 +24,54 @@ import { clearSearchCache } from '../lib/searchCache'
 import { clearHomeCache } from '../lib/homeCache'
 import { clearImageCache } from '../lib/image'
 import { toast } from '../components/Toast'
+import Icon from '../components/Icon'
+
+/**
+ * 可折叠分组:标题行(带 section-bar + 展开箭头)+ 说明 + 内容
+ * 折叠状态持久化到 localStorage(settings_section_<id>)
+ */
+function CollapsibleSection({
+  id,
+  title,
+  hint,
+  children,
+}: {
+  id: string
+  title: ReactNode
+  /** 标题下说明文字(折叠时一并隐藏) */
+  hint?: ReactNode
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(() => {
+    try { return localStorage.getItem(`settings_section_${id}`) !== '0' } catch { return true }
+  })
+  const toggle = () => {
+    setOpen((v) => {
+      try { localStorage.setItem(`settings_section_${id}`, v ? '0' : '1') } catch {}
+      return !v
+    })
+  }
+  return (
+    <section className="mb-8">
+      <button
+        onClick={toggle}
+        className="w-full flex items-center gap-2 text-sm font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider cursor-pointer"
+      >
+        <span className="section-bar" />
+        {title}
+        <Icon
+          name="chevron-down"
+          size={14}
+          strokeWidth={2}
+          className={`ml-1 transition-transform duration-200 ${open ? '' : '-rotate-90'}`}
+        />
+      </button>
+      {hint && open && <p className="text-xs text-[var(--color-text-tertiary)] mb-4 mt-1">{hint}</p>}
+      {!hint && <div className="mb-4" />}
+      {open && children}
+    </section>
+  )
+}
 
 /**
  * 表单字段容器:标签行(可带右侧状态 badge)+ 输入控件 + 说明文字
@@ -194,14 +242,11 @@ export default function Settings() {
       </div>
 
       {/* ============ 服务器配置 ============ */}
-      <section className="mb-8">
-        <h3 className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-tertiary)] mb-1 uppercase tracking-wider">
-          <span className="section-bar" />
-          服务器配置
-        </h3>
-        <p className="text-xs text-[var(--color-text-tertiary)] mb-4">
-          连接到 moontvplus 服务器以使用观看历史、收藏、首页推荐等功能;留空字段并断开后,仅靠下方「自定义源」使用
-        </p>
+      <CollapsibleSection
+        id="server"
+        title="服务器配置"
+        hint="连接到 moontvplus 服务器以使用观看历史、收藏、首页推荐等功能;留空字段并断开后,仅靠下方「自定义源」使用"
+      >
         <div
           className="space-y-4 p-5 rounded-lg"
           style={{
@@ -278,17 +323,14 @@ export default function Settings() {
             )}
           </div>
         </div>
-      </section>
+      </CollapsibleSection>
 
       {/* ============ 自定义源 ============ */}
-      <section className="mb-8">
-        <h3 className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-tertiary)] mb-1 uppercase tracking-wider">
-          <span className="section-bar" />
-          自定义源
-        </h3>
-        <p className="text-xs text-[var(--color-text-tertiary)] mb-4">
-          填写以下任一源将脱离 moontvplus 服务器使用对应自定义源;留空则回退到服务器
-        </p>
+      <CollapsibleSection
+        id="custom"
+        title="自定义源"
+        hint="填写以下任一源将脱离 moontvplus 服务器使用对应自定义源;留空则回退到服务器"
+      >
         <div
           className="space-y-5 p-5 rounded-lg"
           style={{
@@ -415,14 +457,10 @@ export default function Settings() {
             视频源列表保存后本地持久缓存,重启不再重新拉取;修改 URL 或点「刷新」才更新
           </p>
         </div>
-      </section>
+      </CollapsibleSection>
 
       {/* ============ 视频过滤 ============ */}
-      <section className="mb-8">
-        <h3 className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-tertiary)] mb-4 uppercase tracking-wider">
-          <span className="section-bar" />
-          视频过滤
-        </h3>
+      <CollapsibleSection id="filter" title="视频过滤">
         <div
           className="space-y-0 rounded-lg"
           style={{
@@ -471,14 +509,10 @@ export default function Settings() {
             </button>
           </div>
         </div>
-      </section>
+      </CollapsibleSection>
 
       {/* ============ 关于 ============ */}
-      <section>
-        <h3 className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-tertiary)] mb-4 uppercase tracking-wider">
-          <span className="section-bar" />
-          关于
-        </h3>
+      <CollapsibleSection id="about" title="关于">
         <div
           className="p-6 rounded-lg"
           style={{
@@ -530,7 +564,7 @@ export default function Settings() {
             </div>
           </div>
         </div>
-      </section>
+      </CollapsibleSection>
     </div>
   )
 }

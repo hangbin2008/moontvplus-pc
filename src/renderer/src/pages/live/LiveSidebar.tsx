@@ -1,11 +1,31 @@
 /**
- * 直播左侧悬浮面板 — 频道/直播源双 Tab、搜索、分组频道列表
+ * 直播左侧悬浮面板 — 频道/直播源双 Tab、搜索(含搜索历史)、分组频道列表
  */
+import { useState } from 'react'
 import Icon from '../../components/Icon'
 import SmartImage from '../../components/SmartImage'
 import { processImageUrl } from '../../lib/image'
 import type { CurrentNextProgram } from '../../lib/m3u'
 import type { ChannelItem, SourceData } from './types'
+
+const SEARCH_HISTORY_KEY = 'live_search_history'
+const SEARCH_HISTORY_LIMIT = 10
+
+/** 读取本地搜索历史(最新在前) */
+function loadSearchHistory(): string[] {
+  try {
+    const raw = localStorage.getItem(SEARCH_HISTORY_KEY)
+    const list = raw ? JSON.parse(raw) : []
+    return Array.isArray(list) ? list.filter((x) => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+/** 保存搜索词:去重置顶,超过上限截断 */
+function saveSearchKeyword(q: string, prev: string[]): string[] {
+  return [q, ...prev.filter((x) => x !== q)].slice(0, SEARCH_HISTORY_LIMIT)
+}
 
 interface LiveSidebarProps {
   sidebarTab: 'sources' | 'channels'
@@ -52,6 +72,33 @@ export default function LiveSidebar({
   channelListRef,
   currentChannelItemRef,
 }: LiveSidebarProps) {
+  /* ============ 搜索历史(本地,Enter 记录) ============ */
+  const [searchHistory, setSearchHistory] = useState<string[]>(loadSearchHistory)
+  const [showHistory, setShowHistory] = useState(false)
+  const commitSearch = () => {
+    const q = search.trim()
+    if (!q) return
+    setSearchHistory((prev) => {
+      const next = saveSearchKeyword(q, prev)
+      try { localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+  const selectHistory = (q: string) => {
+    setSearch(q)
+    setShowHistory(false)
+  }
+  const removeHistory = (q: string) => {
+    setSearchHistory((prev) => {
+      const next = prev.filter((x) => x !== q)
+      try { localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+  const clearHistory = () => {
+    setSearchHistory([])
+    try { localStorage.removeItem(SEARCH_HISTORY_KEY) } catch {}
+  }
   return (
     <aside
       className="absolute left-0 top-0 bottom-0 w-[320px] z-20 flex flex-col animate-slideInLeft pt-10"
@@ -111,12 +158,19 @@ export default function LiveSidebar({
       )}
 
       {/* 搜索框 */}
-      <div className="p-2.5 border-b border-white/[0.06]">
+      <div
+        className="p-2.5 border-b border-white/[0.06]"
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setShowHistory(false)
+        }}
+      >
         <div className="relative group">
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onFocus={() => setShowHistory(true)}
+            onKeyDown={(e) => { if (e.key === 'Enter') commitSearch() }}
             placeholder={sidebarTab === 'sources' ? '搜索直播源...' : '搜索频道...'}
             className="w-full border border-white/10 px-3 py-1.5 pl-8 text-sm text-white placeholder-white/40 focus:outline-none focus:border-primary/50 transition-all rounded"
             style={{ background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
@@ -125,6 +179,48 @@ export default function LiveSidebar({
           <Icon name="search" size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/30" />
           {search && (
             <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-all">✕</button>
+          )}
+
+          {/* 搜索历史下拉 */}
+          {showHistory && searchHistory.length > 0 && (
+            <div
+              className="absolute left-0 right-0 top-full mt-1 z-30 rounded overflow-hidden border border-white/10 shadow-lg"
+              style={{ background: 'rgba(24,26,34,0.97)' }}
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-white/[0.06]">
+                <span className="text-xs text-white/40">搜索历史</span>
+                <button
+                  onClick={clearHistory}
+                  className="text-xs text-white/40 hover:text-red-400 transition-colors"
+                >
+                  清空
+                </button>
+              </div>
+              <div className="max-h-56 overflow-y-auto scrollbar-thin">
+                {searchHistory.map((q) => (
+                  <div
+                    key={q}
+                    className="flex items-center justify-between px-2.5 py-1.5 hover:bg-white/5 transition-colors cursor-pointer group"
+                    onClick={() => selectHistory(q)}
+                  >
+                    <span className="flex items-center gap-1.5 text-sm text-white/70 truncate">
+                      <Icon name="clock" size={12} className="text-white/30 flex-shrink-0" />
+                      <span className="truncate">{q}</span>
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        removeHistory(q)
+                      }}
+                      className="w-4 h-4 flex items-center justify-center text-white/30 hover:text-red-400 transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100"
+                    >
+                      <Icon name="x" size={11} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       </div>
