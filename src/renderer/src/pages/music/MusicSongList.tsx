@@ -5,6 +5,20 @@ import SmartImage from '../../components/SmartImage'
 import Icon from '../../components/Icon'
 import { formatTime } from '../../lib/utils'
 import type { MusicSong } from './types'
+import { SOURCES } from './types'
+
+/** 平台 id → 显示名(酷狗音乐/酷我音乐/网易云音乐...) */
+const SOURCE_LABELS: Record<string, string> = {
+  kw: '酷我音乐',
+  wy: '网易云音乐',
+  tx: 'QQ音乐',
+  kg: '酷狗音乐',
+  mg: '咪咕音乐'
+}
+
+function sourceLabel(source: string): string {
+  return SOURCE_LABELS[source] || SOURCES.find((s) => s.id === source)?.name || source
+}
 
 interface MusicSongListProps {
   searching: boolean
@@ -138,7 +152,12 @@ export default function MusicSongList({
                     >
                       {song.name}
                     </p>
-                    <p className="text-xs text-[var(--color-text-tertiary)] truncate">{song.artist}</p>
+                    <p className="text-xs text-[var(--color-text-tertiary)] truncate">
+                      <span className="inline-block mr-1.5 px-1 py-px text-[10px] leading-3 rounded border border-[var(--color-border-subtle)] text-[var(--color-text-quaternary)] align-middle">
+                        {sourceLabel(song.source)}
+                      </span>
+                      {song.artist}
+                    </p>
                   </div>
 
                   {/* 时长 */}
