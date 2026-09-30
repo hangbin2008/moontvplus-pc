@@ -188,20 +188,40 @@ export function useMusicPlayer({ audioCtxRef, initVisualizer, setHistorySongs }:
       console.log('[Music] Trying server play API:', songToPlay.name, 'source:', songToPlay.source)
       audioUrl = await getMusicUrlFromServer(songToPlay)
 
-      // 2. 服务端失败,尝试 Huibq 公共 API
       if (!audioUrl) {
-        console.log('[Music] Server API failed, trying Huibq:', songToPlay.name, 'source:', songToPlay.source)
-        audioUrl = await getMusicUrlFromHuibq(songToPlay)
+        console.warn('[Music] No URL from server for:', songToPlay.name)
       }
 
-      if (!audioUrl) {
-        console.warn('[Music] No URL from any source for:', songToPlay.name)
-        return false
+      // 2. 播放(12秒超时)
+      let played = false
+      if (audioUrl) {
+        played = await tryPlay(audioUrl, 12000)
+        console.log('[Music] Play result:', played)
       }
 
-      // 3. 播放(12秒超时)
-      const played = await tryPlay(audioUrl, 12000)
-      console.log('[Music] Play result:', played)
+      // 2b. 播放失败:可能320k的URL来自不可用的中转站(如幻音 sayqz.com),
+      //     用128k重新解析(野花等脚本在低质量可能出CDN直链)
+      if (!played) {
+        console.log('[Music] Play failed, retrying with 128k...')
+        const lowUrl = await getMusicUrlFromServer(songToPlay, '128k')
+        if (lowUrl && lowUrl !== audioUrl) {
+          audioUrl = lowUrl
+          played = await tryPlay(audioUrl, 12000)
+          console.log('[Music] Play result (128k):', played)
+        }
+      }
+
+      // 2c. 还是失败,试 Huibq 公共 API
+      if (!played) {
+        console.log('[Music] Server URL unplayable, trying Huibq:', songToPlay.name)
+        const huibqUrl = await getMusicUrlFromHuibq(songToPlay)
+        if (huibqUrl) {
+          audioUrl = huibqUrl
+          played = await tryPlay(audioUrl, 12000)
+          console.log('[Music] Play result (Huibq):', played)
+        }
+      }
+
       if (!played) return false
 
       // 4. 播放成功:并行获取歌词和保存历史
