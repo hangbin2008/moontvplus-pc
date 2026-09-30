@@ -65,7 +65,7 @@ export default function MusicPlayerBar({
     <div className="h-24 flex-shrink-0 glass border-t border-[var(--color-border-subtle)] flex items-center px-5 gap-4 relative">
       {/* 歌曲信息 */}
       <div className="flex items-center gap-3 w-56 flex-shrink-0">
-        <div className="relative w-12 h-12 overflow-hidden flex-shrink-0 bg-[var(--color-hover-overlay-subtle)] ring-1 ring-white/5 rounded">
+        <div className="w-12 h-12 overflow-hidden flex-shrink-0 bg-[var(--color-hover-overlay-subtle)] ring-1 ring-white/5 rounded">
           {currentSong ? (
             <SmartImage src={currentSong.cover || currentSong.pic} alt={currentSong.name} className="w-full h-full" />
           ) : (
@@ -73,12 +73,12 @@ export default function MusicPlayerBar({
               🎵
             </div>
           )}
-          {currentSong && (
-            <span className="absolute bottom-0 left-0 right-0 text-[8px] leading-tight text-white text-center bg-black/60 truncate px-px">
-              {sourceLabel(currentSong.source)}
-            </span>
-          )}
         </div>
+        {currentSong && (
+          <span className="text-[9px] text-[var(--color-text-quaternary)] flex-shrink-0 self-center" style={{ writingMode: 'vertical-rl' }}>
+            {sourceLabel(currentSong.source)}
+          </span>
+        )}
         <div className="min-w-0 flex-1">
           <p className="text-sm text-white truncate font-medium">{currentSong?.name || '未播放'}</p>
           <div className="flex items-center gap-2">
