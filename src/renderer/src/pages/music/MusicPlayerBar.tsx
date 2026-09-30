@@ -6,6 +6,14 @@ import Icon from '../../components/Icon'
 import { formatTime } from '../../lib/utils'
 import type { MusicSong } from './types'
 
+/** 平台 id → 显示名 */
+const SOURCE_LABELS: Record<string, string> = {
+  kw: '酷我', wy: '网易云', tx: 'QQ音乐', kg: '酷狗', mg: '咪咕'
+}
+function sourceLabel(source: string): string {
+  return SOURCE_LABELS[source] || source
+}
+
 interface MusicPlayerBarProps {
   currentSong: MusicSong | undefined
   hasPlaylist: boolean
@@ -57,13 +65,18 @@ export default function MusicPlayerBar({
     <div className="h-24 flex-shrink-0 glass border-t border-[var(--color-border-subtle)] flex items-center px-5 gap-4 relative">
       {/* 歌曲信息 */}
       <div className="flex items-center gap-3 w-56 flex-shrink-0">
-        <div className="w-12 h-12 overflow-hidden flex-shrink-0 bg-[var(--color-hover-overlay-subtle)] ring-1 ring-white/5 rounded">
+        <div className="relative w-12 h-12 overflow-hidden flex-shrink-0 bg-[var(--color-hover-overlay-subtle)] ring-1 ring-white/5 rounded">
           {currentSong ? (
             <SmartImage src={currentSong.cover || currentSong.pic} alt={currentSong.name} className="w-full h-full" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-gray-700 text-xl">
               🎵
             </div>
+          )}
+          {currentSong && (
+            <span className="absolute bottom-0 left-0 right-0 text-[8px] leading-tight text-white text-center bg-black/60 truncate px-px">
+              {sourceLabel(currentSong.source)}
+            </span>
           )}
         </div>
         <div className="min-w-0 flex-1">
