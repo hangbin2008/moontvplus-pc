@@ -232,7 +232,7 @@ export async function getMusicUrlFromServer(song: MusicSong, quality = '320k'): 
         }),
       })
       const url = data?.url
-      if (typeof url === 'string' && url.length > 10) {
+      if (typeof url === 'string' && url.trim().length > 10) {
         console.log(`[CustomMusic] Got URL: q=${q} url=${url.substring(0, 80)}`)
         return url
       }
