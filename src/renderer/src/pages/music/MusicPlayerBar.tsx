@@ -26,6 +26,8 @@ interface MusicPlayerBarProps {
   canvasRef: React.RefObject<HTMLCanvasElement>
   spectrumColor: string
   onSpectrumColorChange: (c: string) => void
+  quality: string
+  onQualityChange: (q: string) => void
 }
 
 export default function MusicPlayerBar({
@@ -47,7 +49,9 @@ export default function MusicPlayerBar({
   onVolumeChange,
   canvasRef,
   spectrumColor,
-  onSpectrumColorChange
+  onSpectrumColorChange,
+  quality,
+  onQualityChange
 }: MusicPlayerBarProps) {
   return (
     <div className="h-24 flex-shrink-0 glass border-t border-[var(--color-border-subtle)] flex items-center px-5 gap-4 relative">
@@ -64,7 +68,19 @@ export default function MusicPlayerBar({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm text-white truncate font-medium">{currentSong?.name || '未播放'}</p>
-          <p className="text-xs text-[var(--color-text-tertiary)] truncate">{currentSong?.artist || '—'}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-[var(--color-text-tertiary)] truncate">{currentSong?.artist || '—'}</p>
+            <select
+              value={quality}
+              onChange={(e) => onQualityChange(e.target.value)}
+              className="text-[10px] text-[var(--color-text-tertiary)] bg-transparent border border-[var(--color-border-subtle)] rounded px-1 py-px cursor-pointer hover:text-[var(--color-text-primary)] transition-colors flex-shrink-0"
+              title="音质"
+            >
+              <option value="320k">320k</option>
+              <option value="192k">192k</option>
+              <option value="128k">128k</option>
+            </select>
+          </div>
         </div>
       </div>
 

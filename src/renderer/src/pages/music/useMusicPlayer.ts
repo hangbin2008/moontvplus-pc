@@ -21,9 +21,11 @@ interface UseMusicPlayerParams {
   audioCtxRef: SpectrumCore['audioCtxRef']
   initVisualizer: SpectrumCore['initVisualizer']
   setHistorySongs: React.Dispatch<React.SetStateAction<MusicSong[]>>
+  /** 用户选择的音质('320k' | '192k' | '128k') */
+  quality: string
 }
 
-export function useMusicPlayer({ audioCtxRef, initVisualizer, setHistorySongs }: UseMusicPlayerParams) {
+export function useMusicPlayer({ audioCtxRef, initVisualizer, setHistorySongs, quality }: UseMusicPlayerParams) {
   /* ============ 播放器状态 ============ */
   const audioRef = useRef<HTMLAudioElement>(null)
   const [playlist, setPlaylist] = useState<MusicSong[]>([])
@@ -56,6 +58,8 @@ export function useMusicPlayer({ audioCtxRef, initVisualizer, setHistorySongs }:
   const tryPlayingRef = useRef(false)
   /** 播放请求 ID:快速切歌时取消旧的异步播放流程 */
   const playRequestIdRef = useRef(0)
+  const qualityRef = useRef(quality)
+  qualityRef.current = quality
 
   /* ============ 加载播放地址并播放(含自动换源) ============ */
   const loadAndPlay = useCallback(async (song: MusicSong) => {
@@ -174,7 +178,7 @@ export function useMusicPlayer({ audioCtxRef, initVisualizer, setHistorySongs }:
 
       // 辅助函数:保存播放历史(异步,不阻塞播放流程)
       const saveHistory = () => {
-        saveMusicHistory(songToPlay, 0, 1, '320k').catch(() => {})
+        saveMusicHistory(songToPlay, 0, 1, qualityRef.current).catch(() => {})
         setHistorySongs((prev) => {
           const filtered = prev.filter((s) => s.songId !== songToPlay.songId)
           return [songToPlay, ...filtered].slice(0, 100)
@@ -186,7 +190,7 @@ export function useMusicPlayer({ audioCtxRef, initVisualizer, setHistorySongs }:
 
       // 1. 服务端 play API(LX Music 音源,可能更稳定)
       console.log('[Music] Trying server play API:', songToPlay.name, 'source:', songToPlay.source)
-      audioUrl = await getMusicUrlFromServer(songToPlay)
+      audioUrl = await getMusicUrlFromServer(songToPlay, qualityRef.current)
 
       if (!audioUrl) {
         console.warn('[Music] No URL from server for:', songToPlay.name)

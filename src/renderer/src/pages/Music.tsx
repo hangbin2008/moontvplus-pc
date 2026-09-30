@@ -33,6 +33,13 @@ import MusicPlayerBar from './music/MusicPlayerBar'
 export default function Music() {
   /* ============ 音乐源 ============ */
   const [source, setSource] = useState('kw')
+  const [quality, setQuality] = useState(() => {
+    try { return localStorage.getItem('music_quality') || '320k' } catch { return '320k' }
+  })
+  const handleQualityChange = (q: string) => {
+    setQuality(q)
+    try { localStorage.setItem('music_quality', q) } catch {}
+  }
 
   /* ============ 数据 hooks ============ */
   const history = useMusicHistory()
@@ -44,7 +51,8 @@ export default function Music() {
   const player = useMusicPlayer({
     audioCtxRef: spectrum.audioCtxRef,
     initVisualizer: spectrum.initVisualizer,
-    setHistorySongs: history.setHistorySongs
+    setHistorySongs: history.setHistorySongs,
+    quality
   })
   useSpectrumRender(spectrum, player.isPlaying)
 
@@ -163,6 +171,8 @@ export default function Music() {
         canvasRef={spectrum.canvasRef}
         spectrumColor={spectrum.spectrumColor}
         onSpectrumColorChange={spectrum.setSpectrumColor}
+        quality={quality}
+        onQualityChange={handleQualityChange}
       />
 
       {/* ============ 错误提示 ============ */}
