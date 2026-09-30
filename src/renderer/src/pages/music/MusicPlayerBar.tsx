@@ -69,24 +69,24 @@ export default function MusicPlayerBar({
           {currentSong ? (
             <SmartImage src={currentSong.cover || currentSong.pic} alt={currentSong.name} className="w-full h-full" />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-700 text-xl">
+            <div className="w-full h-full flex items-center justify-center text-[var(--color-text-quaternary)] text-xl">
               🎵
             </div>
           )}
         </div>
-        {currentSong && (
-          <span className="text-[9px] text-[var(--color-text-quaternary)] flex-shrink-0 self-center" style={{ writingMode: 'vertical-rl' }}>
-            {sourceLabel(currentSong.source)}
-          </span>
-        )}
         <div className="min-w-0 flex-1">
-          <p className="text-sm text-white truncate font-medium">{currentSong?.name || '未播放'}</p>
-          <div className="flex items-center gap-2">
-            <p className="text-xs text-[var(--color-text-tertiary)] truncate">{currentSong?.artist || '—'}</p>
+          <p className="text-sm text-[var(--color-text-primary)] truncate font-medium">{currentSong?.name || '未播放'}</p>
+          <div className="flex items-center gap-1.5">
+            {currentSong && (
+              <span className="text-[9px] leading-none px-1 py-0.5 rounded border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] bg-[var(--color-hover-overlay-subtle)] flex-shrink-0">
+                {sourceLabel(currentSong.source)}
+              </span>
+            )}
+            <p className="text-xs text-[var(--color-text-secondary)] truncate">{currentSong?.artist || '—'}</p>
             <select
               value={quality}
               onChange={(e) => onQualityChange(e.target.value)}
-              className="text-[10px] text-[var(--color-text-tertiary)] bg-transparent border border-[var(--color-border-subtle)] rounded px-1 py-px cursor-pointer hover:text-[var(--color-text-primary)] transition-colors flex-shrink-0"
+              className="text-[10px] text-[var(--color-text-secondary)] bg-[var(--color-card-bg)] border border-[var(--color-border-subtle)] rounded px-1 py-px cursor-pointer hover:text-[var(--color-text-primary)] transition-colors flex-shrink-0"
               title="音质"
             >
               <option value="320k">320k</option>
@@ -134,7 +134,7 @@ export default function MusicPlayerBar({
 
         {/* 进度条(带时间显示) + 音量(同一行) */}
         <div className="w-full flex items-center gap-2.5">
-          <span className="text-[11px] text-white/80 w-10 text-right tabular-nums font-medium">
+          <span className="text-[11px] text-[var(--color-text-secondary)] w-10 text-right tabular-nums font-medium">
             {formatTime(currentTime)}
           </span>
           <div
@@ -152,7 +152,7 @@ export default function MusicPlayerBar({
               style={{ left: `${progressRatio * 100}%`, borderRadius: '50%' }}
             />
           </div>
-          <span className="text-[11px] text-white/80 w-10 tabular-nums font-medium">
+          <span className="text-[11px] text-[var(--color-text-secondary)] w-10 tabular-nums font-medium">
             {formatTime(duration)}
           </span>
           {/* 音量 */}
