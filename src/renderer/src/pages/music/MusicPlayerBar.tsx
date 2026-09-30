@@ -75,13 +75,15 @@ export default function MusicPlayerBar({
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm text-[var(--color-text-primary)] truncate font-medium">{currentSong?.name || '未播放'}</p>
           <div className="flex items-center gap-1.5">
+            <p className="text-sm text-[var(--color-text-primary)] truncate font-medium min-w-0">{currentSong?.name || '未播放'}</p>
             {currentSong && (
               <span className="text-[9px] leading-none px-1 py-0.5 rounded border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] bg-[var(--color-hover-overlay-subtle)] flex-shrink-0">
                 {sourceLabel(currentSong.source)}
               </span>
             )}
+          </div>
+          <div className="flex items-center gap-1.5">
             <p className="text-xs text-[var(--color-text-secondary)] truncate">{currentSong?.artist || '—'}</p>
             <select
               value={quality}
