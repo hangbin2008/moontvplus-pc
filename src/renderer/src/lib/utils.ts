@@ -9,6 +9,22 @@ export function normalizeTitle(title: string): string {
 }
 
 /**
+ * 清洗资源源名称的展示文本:剥离开头的装饰 emoji 与分隔符
+ * 数据中源名常为 "🎬-爱奇艺-"、"🎬豆瓣资源"、"🔞香蕉资源" 等格式,
+ * emoji 在部分平台回退成单色方块;NSFW 检测仍使用原始名称,此处仅用于展示。
+ */
+export function stripSourceName(raw: string | undefined | null): string {
+  if (!raw) return ''
+  let s = String(raw)
+  let prev: string
+  do {
+    prev = s
+    s = s.replace(/^(?:\p{Extended_Pictographic}|[\uFE0F\u200D\s\-—–_·•*※★☆▶►])+/u, '')
+  } while (s !== prev)
+  return s.trim().replace(/^[-—–_\s]+|[-—–_\s]+$/g, '').trim()
+}
+
+/**
  * 将时间戳格式化为相对时间字符串
  * 规则:刚刚 / X分钟前 / X小时前 / X天前 / YYYY-MM-DD
  */

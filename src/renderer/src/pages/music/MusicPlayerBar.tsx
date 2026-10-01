@@ -76,26 +76,42 @@ export default function MusicPlayerBar({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <p className="text-sm text-[var(--color-text-primary)] truncate font-medium min-w-0">{currentSong?.name || '未播放'}</p>
+            <p
+              className="text-sm truncate font-semibold min-w-0"
+              style={{ color: 'var(--pb-name-color)' }}
+            >{currentSong?.name || '未播放'}</p>
             {currentSong && (
-              <span className="text-[9px] leading-none px-1 py-0.5 rounded border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] bg-[var(--color-hover-overlay-subtle)] flex-shrink-0">
+              <span
+                className="text-[9px] leading-none px-1 py-0.5 rounded border font-medium flex-shrink-0"
+                style={{
+                  color: 'var(--pb-tag-color)',
+                  borderColor: 'var(--pb-tag-border)',
+                  backgroundColor: 'var(--pb-tag-bg)'
+                }}
+              >
                 {sourceLabel(currentSong.source)}
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1.5">
-            <p className="text-xs text-[var(--color-text-secondary)] truncate">{currentSong?.artist || '—'}</p>
-            <select
-              value={quality}
-              onChange={(e) => onQualityChange(e.target.value)}
-              className="text-[10px] text-[var(--color-text-secondary)] bg-[var(--color-card-bg)] border border-[var(--color-border-subtle)] rounded px-1 py-px cursor-pointer hover:text-[var(--color-text-primary)] transition-colors flex-shrink-0"
-              title="音质"
-            >
-              <option value="320k">320k</option>
-              <option value="192k">192k</option>
-              <option value="128k">128k</option>
-            </select>
-          </div>
+          <p
+            className="text-xs truncate leading-tight mt-0.5"
+            style={{ color: 'var(--pb-artist-color)' }}
+          >{currentSong?.artist || '—'}</p>
+          <select
+            value={quality}
+            onChange={(e) => onQualityChange(e.target.value)}
+            className="mt-0.5 text-[10px] border rounded px-1 py-px cursor-pointer transition-colors flex-shrink-0 hover:opacity-80"
+            style={{
+              color: 'var(--pb-quality-color)',
+              backgroundColor: 'var(--pb-quality-bg)',
+              borderColor: 'var(--pb-quality-border)'
+            }}
+            title="音质"
+          >
+            <option value="320k">320k</option>
+            <option value="192k">192k</option>
+            <option value="128k">128k</option>
+          </select>
         </div>
       </div>
 

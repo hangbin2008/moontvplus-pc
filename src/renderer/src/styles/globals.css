@@ -42,6 +42,16 @@
   --color-text-quaternary: #3e3e46;
   --color-text-faint: #28282e;
 
+  /* 音乐播放栏信息区(深色:极简点缀,只有歌名与平台标签为主题色) */
+  --pb-name-color: var(--color-primary);
+  --pb-tag-color: var(--color-primary);
+  --pb-tag-border: transparent;
+  --pb-tag-bg: transparent;
+  --pb-artist-color: var(--color-text-secondary);
+  --pb-quality-color: var(--color-text-tertiary);
+  --pb-quality-border: var(--color-border-subtle);
+  --pb-quality-bg: var(--color-card-bg);
+
   /* 渐变 */
   --color-gradient-from: rgba(10, 10, 13, 0.95);
   --color-gradient-via: rgba(10, 10, 13, 0.5);
@@ -111,6 +121,16 @@
   --color-text-tertiary: #585864;
   --color-text-quaternary: #85858f;
   --color-text-faint: #b0b0b8;
+
+  /* 音乐播放栏信息区(浅色:保持主题色描边样式) */
+  --pb-name-color: var(--color-primary);
+  --pb-tag-color: var(--color-primary);
+  --pb-tag-border: color-mix(in srgb, var(--color-primary) 50%, transparent);
+  --pb-tag-bg: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  --pb-artist-color: color-mix(in srgb, var(--color-primary) 55%, var(--color-text-secondary));
+  --pb-quality-color: var(--color-primary);
+  --pb-quality-border: color-mix(in srgb, var(--color-primary) 40%, transparent);
+  --pb-quality-bg: color-mix(in srgb, var(--color-primary) 10%, transparent);
 
   --color-gradient-from: rgba(232, 234, 240, 0.95);
   --color-gradient-via: rgba(232, 234, 240, 0.5);
@@ -419,6 +439,11 @@ body {
   background: var(--color-primary);
   color: #fff;
   border-color: var(--color-primary);
+}
+/* 加宽版 chip:仅用于搜索结果页源筛选,背景左右留白更大 */
+.chip-wide {
+  padding-left: 16px;
+  padding-right: 16px;
 }
 
 /* ================================================================

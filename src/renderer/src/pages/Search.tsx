@@ -19,7 +19,7 @@ import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { searchStream, getSearchHistory, saveSearchHistory, clearSearchHistory, getSearchResources, getDoubanCategories } from '../lib/api'
 import { cacheSearchResults, cacheSearchResult, getPersistedSearchResults, setPersistedSearchResults } from '../lib/searchCache'
-import { normalizeTitle, buildDetailUrl, calcProgress } from '../lib/utils'
+import { normalizeTitle, buildDetailUrl, calcProgress, stripSourceName } from '../lib/utils'
 import { useStore } from '../lib/store'
 import type { SearchResult, SearchSSEEvent, DoubanCategoryItem } from '../types'
 import MediaCard from '../components/MediaCard'
@@ -98,11 +98,11 @@ function titleScore(query: string, title: string): number {
 /** 骨架卡片数量 */
 const SKELETON_COUNT = 18
 
-/** 卡片网格样式(统一) — 160px 起步,卡片更大更易点 */
+/** 卡片网格样式(统一) — 140px 起步,更紧凑 */
 const cardGridStyle: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-  gap: '14px',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+  gap: '12px',
   alignItems: 'start',
 }
 
@@ -151,7 +151,7 @@ function SearchResultCard({ item, variants, query }: SearchResultCardProps) {
  }
  subtitle={
  item.source_name ? (
- <p className="text-[10px] text-white/60 truncate mt-0.5 drop-shadow-md">{item.source_name}</p>
+ <p className="text-[10px] text-white/60 truncate mt-0.5 drop-shadow-md">{stripSourceName(item.source_name)}</p>
  ) : undefined
  }
  topLeft={
@@ -430,7 +430,7 @@ export default function Search() {
  .filter((g) => g.results.length > 0)
  .map((g) => ({
  source: g.source,
- sourceName: g.sourceName,
+ sourceName: stripSourceName(g.sourceName),
  count: g.results.length
  })),
  [groups]
@@ -532,7 +532,7 @@ const handleRecommendClick = useCallback((item: DoubanCategoryItem) => {
  <div className="p-6">
  {/* ============ 搜索框 ============ */}
  <div className="mb-6">
- <form onSubmit={handleSearch} className="relative max-w-2xl">
+ <form onSubmit={handleSearch} className="relative max-w-3xl mx-auto">
  <Icon name="search" size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] pointer-events-none" />
  <input
  type="text"
@@ -555,14 +555,12 @@ const handleRecommendClick = useCallback((item: DoubanCategoryItem) => {
  </form>
  </div>
 
- {/* ============ 无关键词:热门搜索 + 搜索历史(并排) + 推荐 ============ */}
+ {/* ============ 无关键词:热门搜索 + 搜索历史 + 推荐(上下布局) ============ */}
  {!q && (
- <div className="max-w-4xl">
- {/* 热门搜索 + 搜索历史 并排(窄屏自动堆叠) */}
- <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+ <div className="max-w-3xl mx-auto">
  {/* 热门搜索 */}
- <div>
- <h3 className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-secondary)] mb-3">
+ <div className="mb-8">
+ <h3 className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-secondary)] mb-4">
  <span className="section-bar" />
  热门搜索
  </h3>
@@ -582,8 +580,8 @@ const handleRecommendClick = useCallback((item: DoubanCategoryItem) => {
 
  {/* 搜索历史 */}
  {history.length > 0 && (
- <div>
- <div className="flex items-center justify-between mb-3">
+ <div className="mb-8">
+ <div className="flex items-center justify-between mb-4">
  <h3 className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-secondary)]">
  <span className="section-bar" />
  搜索历史
@@ -621,12 +619,11 @@ const handleRecommendClick = useCallback((item: DoubanCategoryItem) => {
  </div>
  </div>
  )}
- </div>
 
  {/* 猜你喜欢推荐 */}
  {recommendList.length > 0 && (
- <div>
- <h3 className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-secondary)] mb-3">
+ <div className="mb-8">
+ <h3 className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-secondary)] mb-4">
  <span className="section-bar" />
  猜你喜欢
  </h3>
@@ -669,34 +666,34 @@ const handleRecommendClick = useCallback((item: DoubanCategoryItem) => {
  {/* ============ 搜索进度条(搜索中显示,百分比 + 源数更直观) ============ */}
  {q && loading && (
  <div className="mb-4">
- <div className="flex items-center justify-between mb-2">
- <div className="flex items-center gap-2 text-sm">
+ <div className="flex items-center justify-between mb-2 text-xs">
+ <div className="flex items-center gap-2">
  <span className="spinner-sm flex-shrink-0" />
  <span className="text-[var(--color-text-secondary)]">搜索中</span>
  <span className="text-[var(--color-text-quaternary)]">·</span>
  <span className="text-white font-semibold tabular-nums">{searchProgress}%</span>
- <span className="text-[var(--color-text-tertiary)] text-xs tabular-nums">
+ <span className="text-[var(--color-text-tertiary)] tabular-nums">
  ({completedSources}/{totalSources || '?'} 源)
  </span>
  </div>
  <div className="flex items-center gap-3">
- <span className="text-xs text-[var(--color-text-tertiary)]">
+ <span className="text-[var(--color-text-tertiary)]">
  已找到 <span className="text-primary font-medium tabular-nums">{totalFound}</span> 条
  </span>
  <button
  type="button"
  onClick={handleCancel}
- className="btn-ghost px-3 py-1.5 text-xs flex-shrink-0"
+ className="btn-ghost px-3 py-1 text-xs flex-shrink-0"
  >
  取消
  </button>
  </div>
  </div>
- <div className="h-1 bg-[var(--color-hover-overlay-subtle)] overflow-hidden border border-[var(--color-border-subtle)] rounded-full">
-			<div
-				className="h-full progress-bar rounded-full"
-				style={{ width: `${searchProgress}%` }}
-			/>
+ <div className="h-1 bg-[var(--color-hover-overlay-subtle)] overflow-hidden rounded-full">
+				<div
+					className="h-full progress-bar rounded-full"
+					style={{ width: `${searchProgress}%` }}
+				/>
  </div>
  </div>
  )}
@@ -706,33 +703,33 @@ const handleRecommendClick = useCallback((item: DoubanCategoryItem) => {
  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
  {/* 左:视图切换(分段控件) */}
  <div className="flex items-center gap-0.5 bg-[var(--color-hover-overlay-subtle)] p-1 border border-[var(--color-border-subtle)] rounded">
-			<button
-				onClick={() => setViewMode('aggregate')}
-				className={`px-3.5 py-1.5 text-xs font-medium transition-all rounded ${
-					viewMode === 'aggregate'
-					? 'bg-[var(--color-card-bg)] text-[var(--color-text-primary)] shadow-sm'
-					: 'text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover-overlay)]'
-				}`}
-			>
-				聚合视图
-			</button>
-			<button
-				onClick={() => setViewMode('grouped')}
-				className={`px-3.5 py-1.5 text-xs font-medium transition-all rounded ${
-					viewMode === 'grouped'
-					? 'bg-[var(--color-card-bg)] text-[var(--color-text-primary)] shadow-sm'
-					: 'text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover-overlay)]'
-				}`}
-			>
- 分组视图
- </button>
- </div>
+				<button
+					onClick={() => setViewMode('aggregate')}
+					className={`px-3 py-1 text-xs font-medium transition-all rounded ${
+						viewMode === 'aggregate'
+						? 'bg-[var(--color-card-bg)] text-[var(--color-text-primary)] shadow-sm'
+						: 'text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover-overlay)]'
+					}`}
+				>
+					聚合视图
+				</button>
+				<button
+					onClick={() => setViewMode('grouped')}
+					className={`px-3 py-1 text-xs font-medium transition-all rounded ${
+						viewMode === 'grouped'
+						? 'bg-[var(--color-card-bg)] text-[var(--color-text-primary)] shadow-sm'
+						: 'text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover-overlay)]'
+					}`}
+				>
+	 分组视图
+	 </button>
+	 </div>
 
  {/* 右:源筛选 */}
- <div className="flex flex-wrap items-center gap-2">
+ <div className="flex flex-wrap items-center gap-1.5">
  <button
  onClick={() => setFilterSource('')}
- className={!filterSource ? 'chip-active' : 'chip'}
+ className={!filterSource ? 'chip chip-active chip-wide' : 'chip chip-wide'}
  >
  全部 ({totalFound})
  </button>
@@ -742,7 +739,7 @@ const handleRecommendClick = useCallback((item: DoubanCategoryItem) => {
  onClick={() =>
  setFilterSource((prev) => (prev === chip.source ? '' : chip.source))
  }
- className={filterSource === chip.source ? 'chip-active' : 'chip'}
+ className={filterSource === chip.source ? 'chip chip-active chip-wide' : 'chip chip-wide'}
  >
  {chip.sourceName} ({chip.count})
  </button>
@@ -772,7 +769,7 @@ const handleRecommendClick = useCallback((item: DoubanCategoryItem) => {
  <div key={group.source}>
  <h3 className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-secondary)] mb-2.5">
  <span className="section-bar" />
- {group.sourceName}
+ {stripSourceName(group.sourceName)}
  <span className="text-[var(--color-text-quaternary)]">({group.results.length})</span>
  </h3>
  <div style={cardGridStyle}>
@@ -804,7 +801,7 @@ const handleRecommendClick = useCallback((item: DoubanCategoryItem) => {
  <div className="flex flex-wrap gap-2">
  {errorSources.map((e, i) => (
  <span key={i} className="badge text-xs">
- {e.sourceName}: {e.error}
+ {stripSourceName(e.sourceName)}: {e.error}
  </span>
  ))}
  </div>
@@ -813,7 +810,9 @@ const handleRecommendClick = useCallback((item: DoubanCategoryItem) => {
 
  {/* ============ 空状态 + 搜索建议 ============ */}
  {q && !loading && !hasResults && (
- <div className="flex flex-col items-center justify-center py-24 text-center">
+ <div>
+ {/* 空状态提示 */}
+ <div className="flex flex-col items-center justify-center py-16 text-center">
  <div className="w-20 h-20 flex items-center justify-center bg-[var(--color-hover-overlay-subtle)] border border-[var(--color-border-subtle)] mb-5 rounded-lg">
  <Icon name="film" size={36} strokeWidth={1.2} className="text-[var(--color-text-quaternary)]" />
  </div>
@@ -822,8 +821,8 @@ const handleRecommendClick = useCallback((item: DoubanCategoryItem) => {
  </p>
  <p className="text-[var(--color-text-quaternary)] text-sm mb-6">试试其他关键词,或检查资源源配置</p>
  {suggestions.length > 0 && (
- <div className="max-w-md mx-auto">
- <p className="text-xs text-[var(--color-text-quaternary)] mb-2">搜索建议</p>
+ <div>
+ <p className="text-xs text-[var(--color-text-quaternary)] mb-3">搜索建议</p>
  <div className="flex flex-wrap justify-center gap-2">
  {suggestions.map((s, i) => (
  <button
@@ -833,15 +832,16 @@ const handleRecommendClick = useCallback((item: DoubanCategoryItem) => {
  >
  {s}
  </button>
-))}
+ ))}
  </div>
  </div>
  )}
+ </div>
 
  {/* 猜你喜欢推荐 */}
  {recommendList.length > 0 && (
- <div className="max-w-4xl mx-auto mt-8">
- <h3 className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-secondary)] mb-3">
+ <div className="max-w-3xl mx-auto">
+ <h3 className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-secondary)] mb-4">
  <span className="section-bar" />
  猜你喜欢
  </h3>

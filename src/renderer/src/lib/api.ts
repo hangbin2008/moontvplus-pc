@@ -41,21 +41,86 @@ let customSitesInflight: Promise<CustomApiSite[]> | null = null
 const CUSTOM_SITES_FAIL_COOLDOWN = 30 * 1000 // 失败后 30 秒冷却,防止高频重试
 
 /**
- * 规范化视频源 URL:统一 format=0(原始 JSON)
- * format=2 是 Base58 编码、format 缺省会返回网页,均无法 JSON 解析,自动纠正
+ * 规范化视频源 URL:缺省 format 时补 format=0
+ * (format 缺省会返回 HTML 说明页;0/1 为 JSON、2/3 为 Base58,均原生支持,保留用户选择)
  */
 function normalizeVideoSourceUrl(u: string): string {
   try {
     const parsed = new URL(u)
-    if (parsed.searchParams.has('format')) {
-      parsed.searchParams.set('format', '0')
-    } else {
+    if (!parsed.searchParams.has('format')) {
       parsed.searchParams.set('format', '0')
     }
     return parsed.toString()
   } catch {
     return u
   }
+}
+
+/* ============ Base58 解码(format=2/3 订阅) ============ */
+const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+const BASE58_INDEX = (() => {
+  const table = new Int8Array(128).fill(-1)
+  for (let i = 0; i < BASE58_ALPHABET.length; i++) table[BASE58_ALPHABET.charCodeAt(i)] = i
+  return table
+})()
+
+/** 判断字符串是否为纯 Base58 文本(用于区分 JSON 与 Base58 响应) */
+function isBase58Text(s: string): boolean {
+  if (s.length < 16) return false
+  for (let i = 0; i < s.length; i++) {
+    const code = s.charCodeAt(i)
+    if (code >= 128 || BASE58_INDEX[code] === -1) return false
+  }
+  return true
+}
+
+/** Base58(Bitcoin 字母表)解码,标准字节进位实现 */
+function base58Decode(str: string): Uint8Array {
+  let zeros = 0
+  while (zeros < str.length && str[zeros] === '1') zeros++
+  // log(58)/log(256) ≈ 0.7332,向上取整并留 1 字节余量
+  const size = (((str.length - zeros) * 7333) / 10000 | 0) + 1
+  const b256 = new Uint8Array(size)
+  for (let i = zeros; i < str.length; i++) {
+    let carry = BASE58_INDEX[str.charCodeAt(i)]
+    if (carry < 0) throw new Error('invalid base58 character')
+    for (let j = size - 1; j >= 0; j--) {
+      carry += 58 * b256[j]
+      b256[j] = carry & 0xff
+      carry >>= 8
+    }
+  }
+  let it = 0
+  while (it < size && b256[it] === 0) it++
+  const out = new Uint8Array(zeros + (size - it))
+  out.set(b256.subarray(it), zeros)
+  return out
+}
+
+/**
+ * 构造苹果 CMS 请求 URL,兼容两种源地址:
+ *  - 直连: https://x.com/api.php/provide/vod → 直接在末尾拼 query
+ *  - 中转代理: https://proxy/?url=<编码后的目标地址>
+ *    参数必须追加进内层 url 并整体编码,直接在外层拼 &ac=... 会被代理丢弃(404)
+ */
+function buildCmsUrl(api: string, params: Record<string, string | number>): string {
+  const qs = Object.entries(params)
+    .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+    .join('&')
+  try {
+    const outer = new URL(api)
+    const inner = outer.searchParams.get('url')
+    if (inner && /^https?:\/\//i.test(inner)) {
+      const innerUrl = new URL(inner)
+      for (const [k, v] of Object.entries(params)) innerUrl.searchParams.set(k, String(v))
+      outer.searchParams.set('url', innerUrl.toString())
+      return outer.toString()
+    }
+  } catch {
+    /* 非标准代理 URL,回退直连拼接 */
+  }
+  const sep = api.includes('?') ? '&' : '?'
+  return `${api}${sep}${qs}`
 }
 
 const K_SITES_CACHE = 'custom_video_sites_cache'
@@ -146,7 +211,15 @@ async function fetchCustomApiSites(force = false): Promise<CustomApiSite[]> {
         customSitesFailedAt = Date.now()
         return []
       }
-      const data = await res.json()
+      const text = (await res.text()).trim()
+      // 兼容 Base58 订阅(format=2/3):先尝试 JSON,失败且像 Base58 则解码后再解析
+      let data: any
+      try {
+        data = JSON.parse(text)
+      } catch {
+        if (!isBase58Text(text)) throw new Error('订阅响应不是有效的 JSON/Base58')
+        data = JSON.parse(new TextDecoder().decode(base58Decode(text)))
+      }
       const raw = (data as any)?.api_site
       const sites: CustomApiSite[] = []
       if (Array.isArray(raw)) {
@@ -261,9 +334,7 @@ async function searchCustomSite(
   query: string
 ): Promise<SearchResult[]> {
   try {
-    const api = site.api
-    const sep = api.includes('?') ? '&' : '?'
-    const url = `${api}${sep}ac=videolist&wd=${encodeURIComponent(query)}`
+    const url = buildCmsUrl(site.api, { ac: 'videolist', wd: query })
     const controller = new AbortController()
     const tid = setTimeout(() => controller.abort(), 20000)
     const res = await fetch(url, { signal: controller.signal })
@@ -290,9 +361,7 @@ async function getCustomDetailFromSite(
   id: string
 ): Promise<SearchResult | null> {
   try {
-    const api = site.api
-    const sep = api.includes('?') ? '&' : '?'
-    const url = `${api}${sep}ac=detail&ids=${encodeURIComponent(id)}`
+    const url = buildCmsUrl(site.api, { ac: 'detail', ids: id })
     const controller = new AbortController()
     const tid = setTimeout(() => controller.abort(), 20000)
     const res = await fetch(url, { signal: controller.signal })
@@ -1006,11 +1075,7 @@ async function fetchCmsJson(
   apiUrl: string,
   params: Record<string, string | number>
 ): Promise<any> {
-  const sep = apiUrl.includes('?') ? '&' : '?'
-  const qs = Object.entries(params)
-    .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
-    .join('&')
-  const url = `${apiUrl}${sep}${qs}`
+  const url = buildCmsUrl(apiUrl, params)
   const controller = new AbortController()
   const tid = setTimeout(() => controller.abort(), 15000)
   try {
