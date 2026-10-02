@@ -119,11 +119,7 @@ export default function MusicSongList({
                 <div
                   key={`${song.source}-${song.songId}-${idx}`}
                   onClick={() => onPlaySong(song, idx, displayList)}
-                  className={`group grid grid-cols-[28px_44px_1fr_auto] gap-3 px-2 py-1.5 cursor-pointer transition-all items-center ${
-                    isCurrent
-                      ? 'bg-primary/20 shadow-[inset_0_0_0_1px_rgba(91,110,255,0.3)]'
-                      : 'hover:bg-[var(--color-hover-overlay)]'
-                  }`}
+                  className={`group grid grid-cols-[28px_44px_1fr_auto] gap-3 px-2 py-1.5 cursor-pointer transition-all items-center hover:bg-[var(--color-hover-overlay)]`}
                 >
                   {/* 序号 / 播放指示 */}
                   <div className="w-7 flex-shrink-0 text-center">

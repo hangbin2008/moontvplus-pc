@@ -55,7 +55,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       >
         {/* Logo 区 */}
         <div
-          className="h-10 px-4 flex items-center gap-2 flex-shrink-0"
+          className="h-12 px-4 pt-2 pb-1 flex items-center gap-2 flex-shrink-0"
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         >
           <TvLogo className="flex-shrink-0" />
@@ -121,7 +121,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 顶部栏 */}
         <header
-          className="glass h-10 flex-shrink-0 border-b border-[var(--color-border-subtle)] flex items-stretch justify-between pl-4 pr-0"
+          className="glass h-12 flex-shrink-0 border-b border-[var(--color-border-subtle)] flex items-stretch justify-between pl-4 pr-0 pt-1.5 pb-0.5"
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         >
           <div className="flex-1" />

@@ -15,6 +15,17 @@ export function useLyrics(lyricData: MusicLyric | null, currentTime: number, dur
   })
   // 歌词字体大小
   const [lyricFontSize, setLyricFontSize] = useState(16)
+  // 歌词背景:cover=模糊封面 / solid=纯色面板 / dark=深色氛围
+  const [lyricBg, setLyricBg] = useState<'cover' | 'solid' | 'dark'>(() => {
+    try {
+      const v = localStorage.getItem('music_lyricBg')
+      return v === 'solid' || v === 'dark' ? v : 'cover'
+    } catch { return 'cover' }
+  })
+  // 纯色模式下的自定义背景色
+  const [lyricBgColor, setLyricBgColor] = useState(() => {
+    try { return localStorage.getItem('music_lyricBgColor') || '#232332' } catch { return '#232332' }
+  })
   const lyricScrollRef = useRef<HTMLDivElement>(null)
   const activeLyricRef = useRef<HTMLDivElement>(null)
 
@@ -22,6 +33,12 @@ export function useLyrics(lyricData: MusicLyric | null, currentTime: number, dur
   useEffect(() => {
     try { localStorage.setItem('music_lyricColor', lyricColor) } catch {}
   }, [lyricColor])
+  useEffect(() => {
+    try { localStorage.setItem('music_lyricBg', lyricBg) } catch {}
+  }, [lyricBg])
+  useEffect(() => {
+    try { localStorage.setItem('music_lyricBgColor', lyricBgColor) } catch {}
+  }, [lyricBgColor])
 
   /* ============ 歌词解析(合并翻译) ============ */
   const lyricLines = useMemo<LyricLine[]>(() => {
@@ -78,6 +95,10 @@ export function useLyrics(lyricData: MusicLyric | null, currentTime: number, dur
     setLyricColor,
     lyricFontSize,
     setLyricFontSize,
+    lyricBg,
+    setLyricBg,
+    lyricBgColor,
+    setLyricBgColor,
     lyricScrollRef,
     activeLyricRef,
     lyricLines,

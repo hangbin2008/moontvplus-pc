@@ -183,6 +183,10 @@ export default function Music() {
           onLyricColorChange={lyric.setLyricColor}
           lyricFontSize={lyric.lyricFontSize}
           onLyricFontSizeChange={lyric.setLyricFontSize}
+          lyricBg={lyric.lyricBg}
+          onLyricBgChange={lyric.setLyricBg}
+          lyricBgColor={lyric.lyricBgColor}
+          onLyricBgColorChange={lyric.setLyricBgColor}
           lyricLines={lyric.lyricLines}
           currentLyricIndex={lyric.currentLyricIndex}
           karaokeProgress={lyric.karaokeProgress}

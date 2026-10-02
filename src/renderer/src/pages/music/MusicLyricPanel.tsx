@@ -1,6 +1,6 @@
 /**
  * 音乐页右侧:两段式面板
- *  - 上段:歌曲封面大图 + 歌名/歌手 + [收藏] [加入播放列表]
+ *  - 上段:歌曲封面大图 + [收藏] [加入播放列表](歌名/歌手在底部播放栏已有,此处不重复)
  *  - 下段:歌词(模糊封面背景 + 卡拉OK高亮 + 设置)
  *
  * 配色全部走主题变量:
@@ -27,6 +27,12 @@ interface MusicLyricPanelProps {
   onLyricColorChange: (c: string) => void
   lyricFontSize: number
   onLyricFontSizeChange: (size: number) => void
+  /** 歌词背景:cover=模糊封面 / solid=纯色面板 / dark=深色氛围 */
+  lyricBg: 'cover' | 'solid' | 'dark'
+  onLyricBgChange: (bg: 'cover' | 'solid' | 'dark') => void
+  /** 纯色模式下的自定义背景色 */
+  lyricBgColor: string
+  onLyricBgColorChange: (color: string) => void
   lyricLines: LyricLine[]
   currentLyricIndex: number
   karaokeProgress: number
@@ -45,6 +51,10 @@ export default function MusicLyricPanel({
   onLyricColorChange,
   lyricFontSize,
   onLyricFontSizeChange,
+  lyricBg,
+  onLyricBgChange,
+  lyricBgColor,
+  onLyricBgColorChange,
   lyricLines,
   currentLyricIndex,
   karaokeProgress,
@@ -55,10 +65,13 @@ export default function MusicLyricPanel({
 
   return (
     <div className="w-72 flex-shrink-0 border-l border-[var(--color-border-subtle)] flex flex-col bg-[var(--color-panel-bg)]">
-      {/* ============ 上段:封面大图 + 信息 + 操作 ============ */}
+      {/* ============ 上段:封面大图 + 操作 ============ */}
       <div className="flex-shrink-0 px-5 pt-4 pb-3 border-b border-[var(--color-border-subtle)]">
-        {/* 大封面(方形,封顶 200px 保证小窗口下歌词区仍有空间) */}
-        <div className="w-full max-w-[200px] aspect-square mx-auto rounded-xl overflow-hidden relative bg-[var(--color-hover-overlay-subtle)] ring-1 ring-white/5 shadow-lg shadow-black/20">
+        {/* 大封面(方形,尺寸随窗口高度自适应:窗口矮时自动缩小,把高度让给歌词区) */}
+        <div
+          className="aspect-square mx-auto rounded-xl overflow-hidden relative bg-[var(--color-hover-overlay-subtle)] ring-1 ring-white/5 shadow-lg shadow-black/20"
+          style={{ width: 'min(100%, clamp(120px, 20vh, 220px))' }}
+        >
           {coverUrl ? (
             <img
               key={currentSong!.songmid || currentSong!.name}
@@ -73,16 +86,8 @@ export default function MusicLyricPanel({
           )}
         </div>
 
-        {/* 歌名 / 歌手 */}
-        <p className="mt-2 text-sm font-semibold truncate text-center text-[var(--color-text-primary)]">
-          {currentSong?.name || '未播放'}
-        </p>
-        <p className="mt-0.5 text-xs truncate text-center text-[var(--color-text-tertiary)]">
-          {currentSong?.artist || '—'}
-        </p>
-
-        {/* 操作按钮:收藏 / 加入播放列表 */}
-        <div className="mt-2.5 flex gap-2">
+        {/* 操作按钮:收藏 / 加入播放列表(歌名/歌手在底部播放栏展示,此处省略) */}
+        <div className="mt-3 flex gap-2">
           <button
             onClick={onToggleFavorite}
             disabled={!currentSong}
@@ -116,10 +121,13 @@ export default function MusicLyricPanel({
         </div>
       </div>
 
-      {/* ============ 下段:歌词(模糊封面氛围 + 设置) ============ */}
-      <div className="flex-1 flex flex-col relative overflow-hidden min-h-0">
-        {/* 模糊专辑封面背景:大模糊+降亮,只保留氛围色调 */}
-        {coverUrl && (
+      {/* ============ 下段:歌词(背景可选:模糊封面 / 纯色 / 深色) ============ */}
+      <div
+        className="flex-1 flex flex-col relative overflow-hidden min-h-0"
+        style={lyricBg === 'solid' ? { backgroundColor: lyricBgColor } : lyricBg === 'dark' ? { backgroundColor: '#101018' } : undefined}
+      >
+        {/* 模糊专辑封面背景:仅 cover 模式显示,大模糊+降亮,只保留氛围色调 */}
+        {lyricBg === 'cover' && coverUrl && (
           <img
             src={coverUrl}
             alt=""
@@ -127,12 +135,16 @@ export default function MusicLyricPanel({
             style={{ filter: 'blur(70px) brightness(0.55) saturate(1.35)', transform: 'scale(1.25)', opacity: 0.55 }}
           />
         )}
-        {/* 主题遮罩:上下不透明、中间微透,既露出封面色调又保证歌词可读,深浅色模式自适应 */}
+        {/* 遮罩:cover 模式上下不透明、中间微透封面色;solid 模式纯色微渐变;dark 模式深色渐变 */}
         <div
           className="absolute inset-0"
           style={{
             background:
-              'linear-gradient(180deg, var(--color-panel-bg) 0%, color-mix(in srgb, var(--color-panel-bg) 82%, transparent) 28%, color-mix(in srgb, var(--color-panel-bg) 74%, transparent) 72%, var(--color-panel-bg) 100%)'
+              lyricBg === 'cover'
+                ? 'linear-gradient(180deg, var(--color-panel-bg) 0%, color-mix(in srgb, var(--color-panel-bg) 82%, transparent) 28%, color-mix(in srgb, var(--color-panel-bg) 74%, transparent) 72%, var(--color-panel-bg) 100%)'
+                : lyricBg === 'solid'
+                ? `linear-gradient(180deg, ${withAlpha(lyricBgColor, 100)} 0%, ${withAlpha(lyricBgColor, 92)} 50%, ${withAlpha(lyricBgColor, 100)} 100%)`
+                : 'linear-gradient(180deg, rgba(16,16,24,0.9) 0%, rgba(16,16,24,0.75) 50%, rgba(16,16,24,0.9) 100%)'
           }}
         />
         {/* 歌词标题 + 设置 */}
@@ -174,6 +186,25 @@ export default function MusicLyricPanel({
                 title="放大字体"
               >A+</button>
             </div>
+            {/* 背景切换:封面 → 纯色 → 深色 循环 */}
+            <button
+              onClick={() => onLyricBgChange(lyricBg === 'cover' ? 'solid' : lyricBg === 'solid' ? 'dark' : 'cover')}
+              className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-hover-overlay)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)] transition-all"
+              title={`歌词背景:${lyricBg === 'cover' ? '模糊封面' : lyricBg === 'solid' ? '纯色' : '深色'}(点击切换)`}
+            >
+              {lyricBg === 'cover' ? '封面' : lyricBg === 'solid' ? '纯色' : '深色'}
+            </button>
+            {/* 纯色模式取色器 */}
+            {lyricBg === 'solid' && (
+              <label className="relative w-3.5 h-3.5 rounded-full overflow-hidden ring-1 ring-[var(--color-border-subtle)] cursor-pointer" title="点击自定义纯色背景" style={{ backgroundColor: lyricBgColor }}>
+                <input
+                  type="color"
+                  value={lyricBgColor}
+                  onChange={(e) => onLyricBgColorChange(e.target.value)}
+                  className="absolute -inset-2 opacity-0 cursor-pointer"
+                />
+              </label>
+            )}
           </div>
         </div>
         {/* 歌词内容(上下边缘淡出) */}
