@@ -17,6 +17,10 @@ const IMAGE_TTL = 24 * 60 * 60 * 1000
 /** 单张图片大小上限 8MB,避免超大图占满磁盘配额 */
 const MAX_IMAGE_SIZE = 8 * 1024 * 1024
 
+/** 是否运行在 Electron 内(图片磁盘缓存依赖主进程注入的 CORS 头) */
+const isElectron =
+  typeof navigator !== 'undefined' && navigator.userAgent.includes('Electron')
+
 /**
  * 处理图片 URL
  * PC 客户端:直接返回原始 URL,防盗链由主进程注入 Referer 解决
@@ -49,6 +53,12 @@ async function openImageCache(): Promise<Cache | null> {
  */
 export async function resolveImageUrl(rawUrl: string): Promise<string> {
   if (!rawUrl || !/^https?:\/\//i.test(rawUrl)) return rawUrl
+
+  // 磁盘缓存依赖主进程注入的 Access-Control-Allow-Origin 头,fetch 跨域图床才可读;
+  // 普通浏览器(dev 预览/trae-preview)无注入,fetch 跨域图床必然 CORS 失败并在
+  // 控制台打印 net::ERR_FAILED(该日志由浏览器网络层产生,catch 无法抑制),
+  // 且 <img> 标签本身不受 CORS 限制、直连即可显示,故非 Electron 环境直接返回原始 URL
+  if (!isElectron) return rawUrl
 
   const cache = await openImageCache()
   if (!cache) return rawUrl

@@ -536,7 +536,7 @@ export async function search(query: string, special = false): Promise<SearchResu
   if (hasCustomVideo()) {
     const sites = sortSitesByWeight(await fetchCustomApiSites())
     const collected: SearchResult[] = []
-    await runWithConcurrency(sites, 10, async (s) => {
+    await runWithConcurrency(sites, pickSiteConcurrency(sites), async (s) => {
       const r = await searchCustomSite(s, query)
       if (r.length) collected.push(...r)
     })
@@ -546,6 +546,29 @@ export async function search(query: string, special = false): Promise<SearchResu
     params: { q: query, special: special ? 1 : 0 }
   })
   return res.data.results
+}
+
+/**
+ * 按站点 api 主机分布选择搜索并发数。
+ * - format=0/2(直连):各子站 api 分散在不同主机,并发 10
+ * - format=1/3(代理):所有子站 api 同为代理主机(如 pz.v88.qzz.io/?url=...),
+ *   受 Chromium 每域名 6 连接限制、且代理服务端对突发并发会限流(实测可用源在
+ *   并发 10 时被掐断返回 ERR_FAILED,单独请求 200),此类降为 5
+ */
+function pickSiteConcurrency(sites: CustomApiSite[]): number {
+  if (sites.length <= 5) return sites.length
+  const hostCount = new Map<string, number>()
+  for (const s of sites) {
+    try {
+      const host = new URL(s.api).host
+      hostCount.set(host, (hostCount.get(host) ?? 0) + 1)
+    } catch {
+      // 非法 URL 不参与统计
+    }
+  }
+  let maxSameHost = 0
+  for (const n of hostCount.values()) maxSameHost = Math.max(maxSameHost, n)
+  return maxSameHost > sites.length / 2 ? 5 : 10
 }
 
 /**
@@ -614,8 +637,9 @@ export function searchStream(
         onEvent({ type: 'start', query, totalSources: orderedSites.length, timestamp: Date.now() })
         let totalResults = 0
         let completedSources = 0
-        // 限流并发(最多 10 个源同时请求),避免数十个跨主机连接同时建立
-        await runWithConcurrency(orderedSites, 10, async (site) => {
+        // 限流并发:代理型源(format=1/3)全部子站共用代理主机,降为 5 避免
+        // 同域连接超限/代理端限流掐断;直连型(format=0/2)各源异主机,保持 10
+        await runWithConcurrency(orderedSites, pickSiteConcurrency(orderedSites), async (site) => {
           if (controller.signal.aborted) return
           try {
             const results = await searchCustomSite(site, query)
@@ -979,6 +1003,54 @@ async function fetchDoubanCategoriesDirect(
   }
 }
 
+/** 将 CMS vod 条目映射为首页分类条目(豆瓣不可达时的兜底,无评分) */
+function cmsVodToDoubanItem(v: CmsVodItem): DoubanCategoryItem | null {
+  if (!v.vod_pic || !v.vod_name) return null
+  return {
+    id: String(v.vod_id),
+    title: v.vod_name.trim().replace(/\s+/g, ' '),
+    poster: v.vod_pic,
+    rate: '',
+    year: v.vod_year ? v.vod_year.match(/\d{4}/)?.[0] || '' : '',
+  }
+}
+
+/**
+ * 豆瓣榜单不可达(CORS/反爬)时,回退到用户配置采集源的对应分类:
+ * 电影→movie,电视剧→tv,综艺→show。累计 limit 折算为页码逐页拉取合并。
+ */
+async function fetchCategoriesFromCms(
+  homeKind: HomeCatKind,
+  limit: number
+): Promise<DoubanCategoryItem[]> {
+  const cacheKey = `cms:${homeKind}`
+  const want = Math.min(Math.max(limit, 24), 100)
+  const cached = doubanCatCache.get(cacheKey)
+  if (cached && cached.length >= want) return cached.slice(0, want)
+
+  const r = await findCustomCategorySource(homeKind)
+  if (!r) return []
+  const maxPage = Math.max(1, Math.round(want / 24))
+  const collected: DoubanCategoryItem[] = []
+  for (let p = 1; p <= maxPage; p++) {
+    const resp = await getCmsVideos(r.site.api, r.typeId, p)
+    const mapped = resp.list
+      .map(cmsVodToDoubanItem)
+      .filter((x): x is DoubanCategoryItem => !!x)
+    collected.push(...mapped)
+    if (mapped.length === 0 || (resp.pagecount > 0 && p >= resp.pagecount)) break
+  }
+  // 按 id 去重
+  const seen = new Set<string>()
+  const uniq = collected.filter((it) => {
+    if (seen.has(it.id)) return false
+    seen.add(it.id)
+    return true
+  })
+  if (uniq.length > 0) doubanCatCache.set(cacheKey, uniq)
+  return uniq
+}
+
 /** 豆瓣分类列表(热门电影/电视剧/综艺) */
 export async function getDoubanCategories(
   kind: 'movie' | 'tv',
@@ -987,14 +1059,25 @@ export async function getDoubanCategories(
   limit = 30
 ): Promise<DoubanCategoryItem[]> {
   if (hasCustomVideo()) {
-    // 自定义源:直连豆瓣公开榜单获取热门片单+评分
+    // 自定义源:优先直连豆瓣公开榜单获取热门片单+评分
     // (点击卡片走标题聚合搜索,由 CMS 源匹配可播放地址)
     try {
-      return await fetchDoubanCategoriesDirect(kind, type, limit)
+      const list = await fetchDoubanCategoriesDirect(kind, type, limit)
+      if (list.length > 0) return list
     } catch (e) {
       console.warn('[Custom] douban categories error:', e)
-      return []
     }
+    // 豆瓣直连失败/为空(纯浏览器无主进程注入、反爬升级等):
+    // 回退到用户配置采集源的对应分类,保证首页板块有内容而非"暂无数据"
+    try {
+      const homeKind: HomeCatKind =
+        type === 'show' ? 'show' : kind === 'movie' ? 'movie' : 'tv'
+      const fallback = await fetchCategoriesFromCms(homeKind, limit)
+      if (fallback.length > 0) return fallback
+    } catch (e) {
+      console.warn('[Custom] cms category fallback error:', e)
+    }
+    return []
   }
   const res = await client.get('/api/douban/categories', {
     params: { kind, category, type, limit }

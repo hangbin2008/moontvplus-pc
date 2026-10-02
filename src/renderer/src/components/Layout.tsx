@@ -48,30 +48,35 @@ export default function Layout({ children }: { children: ReactNode }) {
     <div className="flex h-screen bg-[var(--color-app-bg)]">
       {/* 侧边栏 */}
       <aside
-        className="w-52 flex-shrink-0 flex flex-col border-r border-[var(--color-border-subtle)] relative"
+        className="w-[192px] flex-shrink-0 flex flex-col border-r border-[var(--color-border-subtle)] relative"
         style={{
           background: 'var(--color-sidebar-bg)',
         }}
       >
         {/* Logo 区 */}
         <div
-          className="h-10 px-4 flex items-center gap-2.5 flex-shrink-0"
+          className="h-10 px-4 flex items-center gap-2 flex-shrink-0"
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         >
           <TvLogo className="flex-shrink-0" />
-          <div className="min-w-0">
+          <div className="min-w-0 flex items-center gap-1.5 relative top-[2px]">
             <h1
-              className="text-base font-bold gradient-text tracking-tight leading-none"
+              className="min-w-0 truncate text-base font-bold gradient-text leading-none"
               style={{ fontFamily: "'Segoe UI', 'Microsoft YaHei', sans-serif" }}
             >
               {serverConfig?.SiteName || 'MoonTVPlus'}
             </h1>
-            <p
-              className="text-[9px] text-[var(--color-text-tertiary)] mt-1 tracking-[0.2em] font-medium"
-              style={{ fontFamily: "'Segoe UI', sans-serif" }}
+            <span
+              className="flex-shrink-0 text-[8px] tracking-[0.1em] font-semibold leading-none border rounded-[3px] px-1 py-[3px]"
+              style={{
+                fontFamily: "'Segoe UI', sans-serif",
+                color: 'var(--color-primary)',
+                borderColor: 'color-mix(in srgb, var(--color-primary) 50%, transparent)',
+                backgroundColor: 'color-mix(in srgb, var(--color-primary) 8%, transparent)'
+              }}
             >
-              PC CLIENT
-            </p>
+              PC
+            </span>
           </div>
         </div>
 
