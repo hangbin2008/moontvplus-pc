@@ -64,7 +64,7 @@ export default function MusicPlayerBar({
   return (
     <div className="h-24 flex-shrink-0 glass border-t border-[var(--color-border-subtle)] flex items-center px-5 gap-4 relative">
       {/* 歌曲信息 */}
-      <div className="flex items-center gap-3 w-56 flex-shrink-0">
+      <div className="flex items-center gap-3 w-40 flex-shrink-0">
         <div className="w-12 h-12 overflow-hidden flex-shrink-0 bg-[var(--color-hover-overlay-subtle)] ring-1 ring-white/5 rounded">
           {currentSong ? (
             <SmartImage src={currentSong.cover || currentSong.pic} alt={currentSong.name} className="w-full h-full" />
@@ -192,13 +192,13 @@ export default function MusicPlayerBar({
             step={0.01}
             value={muted ? 0 : volume}
             onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
-            className="w-24 flex-shrink-0"
+            className="w-14 xl:w-20 flex-shrink-0"
           />
         </div>
       </div>
 
-      {/* 频谱可视化(独立区域) */}
-      <div className="w-44 h-16 flex-shrink-0 relative group/spectrum">
+      {/* 频谱可视化(独立区域,小窗口收窄给进度条留空间) */}
+      <div className="w-32 xl:w-44 h-16 flex-shrink-0 relative group/spectrum">
         <canvas
           ref={canvasRef}
           className="w-full h-full"
