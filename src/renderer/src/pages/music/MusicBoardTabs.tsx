@@ -1,36 +1,51 @@
 /**
- * 音乐页榜单/历史标签行(非搜索模式下显示)
+ * 音乐页「我的收藏 / 播放列表 / 榜单」标签行(非搜索模式下显示)
  */
 import Icon from '../../components/Icon'
 import type { MusicBoard } from './types'
+import type { MusicLibraryView } from './useMusicHistory'
 
 interface MusicBoardTabsProps {
   boards: MusicBoard[]
   currentBoardId: string
-  showHistory: boolean
-  historyCount: number
-  onSelectHistory: () => void
+  view: MusicLibraryView
+  playlistCount: number
+  favoriteCount: number
+  onSelectPlaylist: () => void
+  onSelectFavorites: () => void
   onSelectBoard: (boardId: string) => void
 }
 
 export default function MusicBoardTabs({
   boards,
   currentBoardId,
-  showHistory,
-  historyCount,
-  onSelectHistory,
+  view,
+  playlistCount,
+  favoriteCount,
+  onSelectPlaylist,
+  onSelectFavorites,
   onSelectBoard
 }: MusicBoardTabsProps) {
   return (
     <div className="flex-shrink-0 px-5 py-2 flex items-center gap-1.5 overflow-x-auto border-b border-[var(--color-border-subtle)] scrollbar-thin">
-      {/* 播放历史 */}
+      {/* 我的收藏 */}
       <button
-        onClick={onSelectHistory}
-        className={`flex-shrink-0 flex items-center gap-1 ${showHistory ? 'chip chip-active' : 'chip'}`}
+        onClick={onSelectFavorites}
+        className={`flex-shrink-0 flex items-center gap-1 ${view === 'favorites' ? 'chip chip-active' : 'chip'}`}
       >
-        <Icon name="clock" size={16} className="inline-block" /> 播放历史
-        {historyCount > 0 && (
-          <span className={`text-[10px] ${showHistory ? 'opacity-70' : 'text-[var(--color-text-quaternary)]'}`}>{historyCount}</span>
+        <Icon name="heart-outline" size={15} className="inline-block" /> 我的收藏
+        {favoriteCount > 0 && (
+          <span className={`text-[10px] ${view === 'favorites' ? 'opacity-70' : 'text-[var(--color-text-quaternary)]'}`}>{favoriteCount}</span>
+        )}
+      </button>
+      {/* 播放列表 */}
+      <button
+        onClick={onSelectPlaylist}
+        className={`flex-shrink-0 flex items-center gap-1 ${view === 'playlist' ? 'chip chip-active' : 'chip'}`}
+      >
+        <Icon name="list-music" size={15} className="inline-block" /> 播放列表
+        {playlistCount > 0 && (
+          <span className={`text-[10px] ${view === 'playlist' ? 'opacity-70' : 'text-[var(--color-text-quaternary)]'}`}>{playlistCount}</span>
         )}
       </button>
       {/* 分隔线 */}
@@ -40,7 +55,7 @@ export default function MusicBoardTabs({
         <button
           key={b.id}
           onClick={() => onSelectBoard(b.id)}
-          className={`flex-shrink-0 whitespace-nowrap ${!showHistory && currentBoardId === b.id ? 'chip chip-active' : 'chip'}`}
+          className={`flex-shrink-0 whitespace-nowrap ${view === 'none' && currentBoardId === b.id ? 'chip chip-active' : 'chip'}`}
         >
           {b.name}
         </button>

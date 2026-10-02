@@ -10,14 +10,14 @@
  * 实现已拆分到 pages/music/ 目录:
  * - types.ts            共享类型 / SOURCES / parseLyric
  * - useMusicBoards.ts   榜单数据
- * - useMusicHistory.ts  播放历史
+ * - useMusicHistory.ts  播放列表/收藏
  * - useMusicSearch.ts   搜索
  * - useSpectrum.ts      频谱可视化(Web Audio + Canvas)
  * - useMusicPlayer.ts   播放器状态/加载播放/控制/音量/进度
  * - useLyrics.ts        歌词解析/卡拉OK/滚动
  * - Music*.tsx          展示组件(顶部栏/榜单标签/歌曲列表/歌词面板/播放栏)
  */
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMusicBoards } from './music/useMusicBoards'
 import { useMusicHistory } from './music/useMusicHistory'
 import { useMusicSearch } from './music/useMusicSearch'
@@ -29,6 +29,7 @@ import MusicBoardTabs from './music/MusicBoardTabs'
 import MusicSongList from './music/MusicSongList'
 import MusicLyricPanel from './music/MusicLyricPanel'
 import MusicPlayerBar from './music/MusicPlayerBar'
+import { toast } from '../components/Toast'
 
 export default function Music() {
   /* ============ 音乐源 ============ */
@@ -44,14 +45,14 @@ export default function Music() {
   /* ============ 数据 hooks ============ */
   const history = useMusicHistory()
   const boards = useMusicBoards(source)
-  const search = useMusicSearch(source, () => history.setShowHistory(false))
+  const search = useMusicSearch(source, () => history.setView('none'))
 
   /* ============ 频谱 + 播放器 ============ */
   const spectrum = useSpectrumCore()
   const player = useMusicPlayer({
     audioCtxRef: spectrum.audioCtxRef,
     initVisualizer: spectrum.initVisualizer,
-    setHistorySongs: history.setHistorySongs,
+    upsertPlaylistSong: history.upsertPlaylistSong,
     quality
   })
   useSpectrumRender(spectrum, player.isPlaying)
@@ -79,9 +80,43 @@ export default function Music() {
 
   /* ============ 派生值 ============ */
   const isSearchMode = search.submittedKeyword !== ''
-  const displayList = history.showHistory ? history.historySongs : (isSearchMode ? search.searchResults : boards.boardSongs)
+  const displayList =
+    history.view === 'playlist'
+      ? history.playlistSongs
+      : history.view === 'favorites'
+      ? history.favoriteSongs
+      : isSearchMode
+      ? search.searchResults
+      : boards.boardSongs
   const currentSong = player.currentIndex >= 0 ? player.playlist[player.currentIndex] : undefined
   const progressRatio = player.duration > 0 ? player.currentTime / player.duration : 0
+
+  /* ============ 收藏 / 加入播放列表(带反馈) ============ */
+  const handleToggleFavorite = () => {
+    if (!currentSong) return
+    const fav = history.toggleFavorite(currentSong)
+    toast[fav ? 'success' : 'info'](fav ? `已收藏《${currentSong.name}》` : `已取消收藏《${currentSong.name}》`)
+  }
+
+  const handleAddToPlaylist = () => {
+    if (!currentSong) return
+    const added = history.joinPlaylist(currentSong)
+    toast[added ? 'success' : 'info'](
+      added ? `已加入播放列表` : '该歌曲已在播放列表中'
+    )
+  }
+
+  /* ============ 启动时优先播放播放列表中的音乐 ============ */
+  const didStartupRef = useRef(false)
+  useEffect(() => {
+    if (didStartupRef.current || !history.loaded) return
+    didStartupRef.current = true
+    // 播放列表最近播放的歌曲排在最前,从它开始自动续播
+    if (history.playlistSongs.length > 0 && player.playlist.length === 0) {
+      player.startPlaylist(history.playlistSongs, 0)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [history.loaded, history.playlistSongs])
 
   /* ============ 渲染 ============ */
   return (
@@ -105,10 +140,12 @@ export default function Music() {
         <MusicBoardTabs
           boards={boards.boards}
           currentBoardId={boards.currentBoardId}
-          showHistory={history.showHistory}
-          historyCount={history.historySongs.length}
-          onSelectHistory={() => { history.setShowHistory(true); boards.setCurrentBoardId('') }}
-          onSelectBoard={(id) => { boards.handleBoardChange(id); history.setShowHistory(false) }}
+          view={history.view}
+          playlistCount={history.playlistSongs.length}
+          favoriteCount={history.favoriteSongs.length}
+          onSelectPlaylist={() => { history.setView('playlist'); boards.setCurrentBoardId('') }}
+          onSelectFavorites={() => { history.setView('favorites'); boards.setCurrentBoardId('') }}
+          onSelectBoard={(id) => { boards.handleBoardChange(id); history.setView('none') }}
         />
       )}
 
@@ -122,8 +159,9 @@ export default function Music() {
           isSearchMode={isSearchMode}
           submittedKeyword={search.submittedKeyword}
           searchCount={search.searchResults.length}
-          showHistory={history.showHistory}
-          historyCount={history.historySongs.length}
+          view={history.view}
+          playlistCount={history.playlistSongs.length}
+          favoriteCount={history.favoriteSongs.length}
           boardCount={boards.boardSongs.length}
           currentSong={currentSong}
           isPlaying={player.isPlaying}
@@ -133,9 +171,12 @@ export default function Music() {
           onLoadMore={() => void search.loadMore()}
         />
 
-        {/* 右侧:歌词 */}
+        {/* 右侧:封面 + 歌词 */}
         <MusicLyricPanel
           currentSong={currentSong}
+          isFavorite={history.isFavorite(currentSong)}
+          onToggleFavorite={handleToggleFavorite}
+          onAddToPlaylist={handleAddToPlaylist}
           karaokeMode={lyric.karaokeMode}
           onToggleKaraoke={() => lyric.setKaraokeMode(!lyric.karaokeMode)}
           lyricColor={lyric.lyricColor}

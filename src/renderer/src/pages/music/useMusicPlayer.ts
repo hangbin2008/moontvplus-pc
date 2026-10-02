@@ -10,7 +10,6 @@ import {
   getMusicLyric,
   getMusicUrlFromHuibq,
   getMusicUrlFromServer,
-  saveMusicHistory,
   type MusicSong,
   type MusicLyric
 } from '../../lib/music'
@@ -20,12 +19,13 @@ import type { SpectrumCore } from './useSpectrum'
 interface UseMusicPlayerParams {
   audioCtxRef: SpectrumCore['audioCtxRef']
   initVisualizer: SpectrumCore['initVisualizer']
-  setHistorySongs: React.Dispatch<React.SetStateAction<MusicSong[]>>
+  /** 播放成功后把歌曲加入播放列表(本地持久化) */
+  upsertPlaylistSong: (song: MusicSong) => void
   /** 用户选择的音质('320k' | '192k' | '128k') */
   quality: string
 }
 
-export function useMusicPlayer({ audioCtxRef, initVisualizer, setHistorySongs, quality }: UseMusicPlayerParams) {
+export function useMusicPlayer({ audioCtxRef, initVisualizer, upsertPlaylistSong, quality }: UseMusicPlayerParams) {
   /* ============ 播放器状态 ============ */
   const audioRef = useRef<HTMLAudioElement>(null)
   const [playlist, setPlaylist] = useState<MusicSong[]>([])
@@ -79,7 +79,7 @@ export function useMusicPlayer({ audioCtxRef, initVisualizer, setHistorySongs, q
     // 尝试播放单个 URL,返回是否成功
     // 修复:等待 canplay/playing 事件确认播放,而非仅依赖 play() Promise
     // play() resolve 仅表示浏览器接受了播放请求,不代表音频能正常播放
-    const tryPlay = (url: string, timeoutMs = 12000): Promise<boolean> => {
+    const tryPlay = (url: string, timeoutMs = 12000): Promise<{ ok: boolean; blocked: boolean }> => {
       return new Promise((resolve) => {
         console.log('[Music] tryPlay:', url.substring(0, 80))
         // 先清除旧 src,避免上一首的事件干扰
@@ -94,27 +94,27 @@ export function useMusicPlayer({ audioCtxRef, initVisualizer, setHistorySongs, q
         let timeoutTimer: ReturnType<typeof setTimeout> | null = null
         tryPlayingRef.current = true
 
-        const finish = (result: boolean, reason: string) => {
+        const finish = (result: boolean, blocked: boolean, reason: string) => {
           if (settled) return
           settled = true
           tryPlayingRef.current = false
           cleanup()
-          console.log(`[Music] tryPlay result: ${result} (${reason})`)
-          resolve(result)
+          console.log(`[Music] tryPlay result: ${result} blocked: ${blocked} (${reason})`)
+          resolve({ ok: result, blocked })
         }
 
-        const onCanPlay = () => finish(true, 'canplay event')
-        const onPlaying = () => finish(true, 'playing event')
+        const onCanPlay = () => finish(true, false, 'canplay event')
+        const onPlaying = () => finish(true, false, 'playing event')
         const onError = (e: Event) => {
           const err = (e.target as HTMLAudioElement).error
-          finish(false, `error event: ${err ? `code=${err.code}` : 'unknown'}`)
+          finish(false, false, `error event: ${err ? `code=${err.code}` : 'unknown'}`)
         }
         const onStalled = () => {
           console.warn('[Music] audio stalled, waiting 3s...')
           stallCheckTimer = setTimeout(() => {
             if (settled) return
             if (audio.readyState < 3) {
-              finish(false, 'stalled timeout, readyState still low')
+              finish(false, false, 'stalled timeout, readyState still low')
             }
           }, 3000)
         }
@@ -138,11 +138,17 @@ export function useMusicPlayer({ audioCtxRef, initVisualizer, setHistorySongs, q
           // 如果 readyState 已经 >= 3(HAVE_FUTURE_DATA),可以直接判定成功
           // 否则等待 canplay/playing 事件确认
           if (!settled && audio.readyState >= 3) {
-            finish(true, 'play() resolved with readyState >= 3')
+            finish(true, false, 'play() resolved with readyState >= 3')
           }
         }).catch((err) => {
           console.warn('[Music] play() rejected:', err)
-          finish(false, `play() rejected: ${err?.message || err}`)
+          // 自动播放被浏览器/系统拦截(启动时无用户手势):src 已加载,
+          // 保持就绪暂停态,不应触发换源链或报错
+          if (err?.name === 'NotAllowedError') {
+            finish(false, true, 'autoplay blocked')
+          } else {
+            finish(false, false, `play() rejected: ${err?.message || err}`)
+          }
         })
 
         // 总超时:超时后检查音频是否实际在播放
@@ -150,17 +156,20 @@ export function useMusicPlayer({ audioCtxRef, initVisualizer, setHistorySongs, q
           if (settled) return
           // 如果音频实际在播放(非暂停且有时间进度),判定成功
           if (!audio.paused && audio.currentTime > 0) {
-            finish(true, 'timeout but audio is playing')
+            finish(true, false, 'timeout but audio is playing')
           } else {
-            finish(false, `timeout after ${timeoutMs}ms, readyState=${audio.readyState}`)
+            finish(false, false, `timeout after ${timeoutMs}ms, readyState=${audio.readyState}`)
           }
         }, timeoutMs)
       })
     }
 
-    // 尝试从指定歌曲获取 URL 并播放,返回是否成功
+    // 尝试从指定歌曲获取 URL 并播放
     // 策略:先尝试服务端 play API,失败再尝试 Huibq 公共 API
-    const tryPlaySong = async (songToPlay: MusicSong): Promise<boolean> => {
+    // 返回 { played, blocked }:blocked 表示自动播放被拦截(src 已就绪,非播放失败)
+    const tryPlaySong = async (
+      songToPlay: MusicSong
+    ): Promise<{ played: boolean; blocked: boolean }> => {
 
       // 辅助函数:设置歌词(从服务端单独获取)
       const applyLyrics = async () => {
@@ -176,15 +185,6 @@ export function useMusicPlayer({ audioCtxRef, initVisualizer, setHistorySongs, q
         setLyricData(null)
       }
 
-      // 辅助函数:保存播放历史(异步,不阻塞播放流程)
-      const saveHistory = () => {
-        saveMusicHistory(songToPlay, 0, 1, qualityRef.current).catch(() => {})
-        setHistorySongs((prev) => {
-          const filtered = prev.filter((s) => s.songId !== songToPlay.songId)
-          return [songToPlay, ...filtered].slice(0, 100)
-        })
-      }
-
       // 尝试获取可播放的 URL:服务端 API → Huibq API
       let audioUrl: string | null = null
 
@@ -198,40 +198,48 @@ export function useMusicPlayer({ audioCtxRef, initVisualizer, setHistorySongs, q
 
       // 2. 播放(12秒超时)
       let played = false
+      let blocked = false
       if (audioUrl) {
-        played = await tryPlay(audioUrl, 12000)
-        console.log('[Music] Play result:', played)
+        const r = await tryPlay(audioUrl, 12000)
+        played = r.ok
+        blocked = r.blocked
+        console.log('[Music] Play result:', played, 'blocked:', blocked)
       }
 
-      // 2b. 播放失败:可能320k的URL来自不可用的中转站(如幻音 sayqz.com),
+      // 2b. 播放失败(非拦截):可能320k的URL来自不可用的中转站,
       //     用128k重新解析(野花等脚本在低质量可能出CDN直链)
-      if (!played) {
+      if (!played && !blocked) {
         console.log('[Music] Play failed, retrying with 128k...')
         const lowUrl = await getMusicUrlFromServer(songToPlay, '128k')
         if (lowUrl && lowUrl !== audioUrl) {
           audioUrl = lowUrl
-          played = await tryPlay(audioUrl, 12000)
-          console.log('[Music] Play result (128k):', played)
+          const r = await tryPlay(audioUrl, 12000)
+          played = r.ok
+          blocked = r.blocked
+          console.log('[Music] Play result (128k):', played, 'blocked:', blocked)
         }
       }
 
       // 2c. 还是失败,试 Huibq 公共 API
-      if (!played) {
+      if (!played && !blocked) {
         console.log('[Music] Server URL unplayable, trying Huibq:', songToPlay.name)
         const huibqUrl = await getMusicUrlFromHuibq(songToPlay)
         if (huibqUrl) {
           audioUrl = huibqUrl
-          played = await tryPlay(audioUrl, 12000)
-          console.log('[Music] Play result (Huibq):', played)
+          const r = await tryPlay(audioUrl, 12000)
+          played = r.ok
+          blocked = r.blocked
+          console.log('[Music] Play result (Huibq):', played, 'blocked:', blocked)
         }
       }
 
-      if (!played) return false
+      if (blocked) return { played: false, blocked: true }
+      if (!played) return { played: false, blocked: false }
 
-      // 4. 播放成功:并行获取歌词和保存历史
+      // 4. 播放成功:获取歌词并加入播放列表
       applyLyrics()
-      saveHistory()
-      return true
+      upsertPlaylistSong(songToPlay)
+      return { played: true, blocked: false }
     }
 
     setLoadingUrl(true)
@@ -241,8 +249,15 @@ export function useMusicPlayer({ audioCtxRef, initVisualizer, setHistorySongs, q
     setDuration(0)
 
     // 先尝试当前源
-    if (await tryPlaySong(song)) {
+    const first = await tryPlaySong(song)
+    if (first.played) {
       if (requestId !== playRequestIdRef.current) return // 已被新请求取代
+      setLoadingUrl(false)
+      return
+    }
+    // 自动播放被拦截:src 已加载就绪,静默等待用户点击播放,不换源、不报错
+    if (first.blocked) {
+      if (requestId !== playRequestIdRef.current) return
       setLoadingUrl(false)
       return
     }
@@ -278,7 +293,8 @@ export function useMusicPlayer({ audioCtxRef, initVisualizer, setHistorySongs, q
             s.name === song.name && sameArtist(s.artist || '', song.artist || '')
           )
           const newSong = exactMatch || searchRes.list[0]
-          if (await tryPlaySong(newSong)) {
+          const r = await tryPlaySong(newSong)
+          if (r.played) {
             if (requestId !== playRequestIdRef.current) return // 已被新请求取消
             // 换源成功:同步播放列表当前位置的歌曲,使底部播放栏/列表高亮显示换源后的真实歌曲
             setPlaylist((prev) => {
@@ -292,6 +308,12 @@ export function useMusicPlayer({ audioCtxRef, initVisualizer, setHistorySongs, q
             setLoadingUrl(false)
             return
           }
+          if (r.blocked) {
+            if (requestId !== playRequestIdRef.current) return
+            setPlayError('')
+            setLoadingUrl(false)
+            return
+          }
         }
       } catch (err) {
         console.error(`[Music] Error switching to source ${srcId}:`, err)
@@ -300,7 +322,7 @@ export function useMusicPlayer({ audioCtxRef, initVisualizer, setHistorySongs, q
 
     setPlayError('该歌曲暂时无法播放,已尝试所有可用音源')
     setLoadingUrl(false)
-  }, [initVisualizer, audioCtxRef, setHistorySongs])
+  }, [initVisualizer, audioCtxRef, upsertPlaylistSong])
 
   /* ============ 点击歌曲播放 ============ */
   const handlePlaySong = (song: MusicSong, index: number, list: MusicSong[]) => {
@@ -309,6 +331,16 @@ export function useMusicPlayer({ audioCtxRef, initVisualizer, setHistorySongs, q
     currentIndexRef.current = index
     loadAndPlay(song)
   }
+
+  /* ============ 启动时:用保存的播放列表自动播放 ============ */
+  const startPlaylist = useCallback((songs: MusicSong[], index = 0) => {
+    if (songs.length === 0) return
+    if (index < 0 || index >= songs.length) index = 0
+    setPlaylist(songs)
+    setCurrentIndex(index)
+    currentIndexRef.current = index
+    loadAndPlay(songs[index])
+  }, [loadAndPlay])
 
   /* ============ 播放控制 ============ */
   const togglePlay = async () => {
@@ -423,6 +455,7 @@ export function useMusicPlayer({ audioCtxRef, initVisualizer, setHistorySongs, q
     lyricData,
     progressBarRef,
     handlePlaySong,
+    startPlaylist,
     togglePlay,
     playPrev,
     playNext,

@@ -174,6 +174,8 @@ function createWindow(): void {
       // 保持 webSecurity 开启(默认值):同源策略、file:// 隔离等保护仍然生效。
       // 跨域的视频流(m3u8/ts)、图片及第三方 API 请求由下方 onHeadersReceived
       // 精确注入 CORS 头解决,无需全局关闭 web 安全策略
+      // 允许无用户手势自动播放:启动软件进入音乐页时自动续播播放列表中的音乐
+      autoplayPolicy: 'no-user-gesture-required'
     }
   })
 

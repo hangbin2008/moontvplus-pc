@@ -6,6 +6,7 @@ import Icon from '../../components/Icon'
 import { formatTime } from '../../lib/utils'
 import type { MusicSong } from './types'
 import { SOURCES } from './types'
+import type { MusicLibraryView } from './useMusicHistory'
 
 /** 平台 id → 显示名(酷狗音乐/酷我音乐/网易云音乐...) */
 const SOURCE_LABELS: Record<string, string> = {
@@ -27,8 +28,10 @@ interface MusicSongListProps {
   isSearchMode: boolean
   submittedKeyword: string
   searchCount: number
-  showHistory: boolean
-  historyCount: number
+  /** 库视图:播放列表 / 我的收藏 / 榜单(none) */
+  view: MusicLibraryView
+  playlistCount: number
+  favoriteCount: number
   boardCount: number
   currentSong: MusicSong | undefined
   isPlaying: boolean
@@ -46,8 +49,9 @@ export default function MusicSongList({
   isSearchMode,
   submittedKeyword,
   searchCount,
-  showHistory,
-  historyCount,
+  view,
+  playlistCount,
+  favoriteCount,
   boardCount,
   currentSong,
   isPlaying,
@@ -62,8 +66,10 @@ export default function MusicSongList({
         <span>
           {isSearchMode
             ? `搜索 "${submittedKeyword}" 的结果(${searchCount})`
-            : showHistory
-            ? `播放历史(${historyCount})`
+            : view === 'playlist'
+            ? `播放列表(${playlistCount})`
+            : view === 'favorites'
+            ? `我的收藏(${favoriteCount})`
             : loadingBoards
             ? '加载榜单中...'
             : `共 ${boardCount} 首`}
@@ -92,7 +98,15 @@ export default function MusicSongList({
         ) : displayList.length === 0 ? (
           <div className="px-6 py-20 text-center text-[var(--color-text-tertiary)]">
             <Icon name="music" size={64} strokeWidth={1.2} className="mx-auto mb-4 text-[var(--color-text-quaternary)] opacity-40" />
-            <p>{isSearchMode ? '未找到相关音乐' : showHistory ? '暂无播放历史' : '暂无榜单数据'}</p>
+            <p>
+              {isSearchMode
+                ? '未找到相关音乐'
+                : view === 'playlist'
+                ? '播放列表为空,播放的歌曲会自动加入'
+                : view === 'favorites'
+                ? '暂无收藏音乐,点击歌曲封面区的♥收藏'
+                : '暂无榜单数据'}
+            </p>
           </div>
         ) : (
           <div className="px-3 py-1.5">

@@ -546,3 +546,106 @@ export async function getBoardSongs(source: string, boardId: string, page = 1): 
   const data = res.data?.data || res.data
   return { list: data?.list || [], total: data?.total || 0, page: data?.page || page }
 }
+
+/* ============ 本地优先:播放列表 / 收藏(localStorage) ============ *
+ * 服务端无音乐收藏 API;播放列表除服务端历史外,本地持久化一份,
+ * 保证仅使用自定义 lxserver(无 moontvplus 服务器)时列表与收藏不丢失,
+ * 并支撑"下次打开软件优先播放列表中的音乐"。
+ */
+
+const LOCAL_PLAYLIST_KEY = 'music_playlist_v1'
+const LOCAL_FAVORITES_KEY = 'music_favorites_v1'
+/** 本地播放列表上限 */
+const PLAYLIST_MAX = 200
+/** 本地收藏上限 */
+const FAVORITES_MAX = 500
+
+/** 歌曲唯一键(同源同 ID 即同一首) */
+export function musicSongKey(song: MusicSong): string {
+  return `${song.source || '?'}::${song.songId || song.songmid || song.name}`
+}
+
+function readLocalSongs(key: string): MusicSong[] {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return []
+    const arr = JSON.parse(raw)
+    return Array.isArray(arr) ? arr.filter((s) => s && s.songId && s.name) : []
+  } catch {
+    return []
+  }
+}
+
+function writeLocalSongs(key: string, songs: MusicSong[]): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(songs))
+  } catch {
+    // 配额超限时忽略(条目含 raw 原始对象,体积可能较大)
+  }
+}
+
+/* ---- 播放列表 ---- */
+
+export function getLocalPlaylist(): MusicSong[] {
+  return readLocalSongs(LOCAL_PLAYLIST_KEY)
+}
+
+/** 批量写入本地播放列表(服务端历史回填时使用),截断到上限 */
+export function writeLocalPlaylistBulk(songs: MusicSong[]): void {
+  writeLocalSongs(LOCAL_PLAYLIST_KEY, songs.slice(0, PLAYLIST_MAX))
+}
+
+/** 置顶去重后写入;返回新列表 */
+function upsertLocalList(songs: MusicSong[], song: MusicSong, max: number): MusicSong[] {
+  const key = musicSongKey(song)
+  const filtered = songs.filter((s) => musicSongKey(s) !== key)
+  return [song, ...filtered].slice(0, max)
+}
+
+/** 播放时调用:置顶加入本地播放列表并持久化,返回新列表 */
+export function addToLocalPlaylist(songs: MusicSong[], song: MusicSong): MusicSong[] {
+  const next = upsertLocalList(songs, song, PLAYLIST_MAX)
+  writeLocalSongs(LOCAL_PLAYLIST_KEY, next)
+  return next
+}
+
+/** 手动"加入播放列表":返回 { list, added }(added=false 表示已存在) */
+export function joinLocalPlaylist(
+  songs: MusicSong[],
+  song: MusicSong
+): { list: MusicSong[]; added: boolean } {
+  const key = musicSongKey(song)
+  if (songs.some((s) => musicSongKey(s) === key)) {
+    return { list: songs, added: false }
+  }
+  const list = upsertLocalList(songs, song, PLAYLIST_MAX)
+  writeLocalSongs(LOCAL_PLAYLIST_KEY, list)
+  return { list, added: true }
+}
+
+/* ---- 收藏 ---- */
+
+export function getLocalFavorites(): MusicSong[] {
+  return readLocalSongs(LOCAL_FAVORITES_KEY)
+}
+
+export function isFavoriteSong(songs: MusicSong[], song: MusicSong): boolean {
+  const key = musicSongKey(song)
+  return songs.some((s) => musicSongKey(s) === key)
+}
+
+/** 切换收藏:返回 { list, favorited } */
+export function toggleFavoriteSong(
+  songs: MusicSong[],
+  song: MusicSong
+): { list: MusicSong[]; favorited: boolean } {
+  const key = musicSongKey(song)
+  if (songs.some((s) => musicSongKey(s) === key)) {
+    const list = songs.filter((s) => musicSongKey(s) !== key)
+    writeLocalSongs(LOCAL_FAVORITES_KEY, list)
+    return { list, favorited: false }
+  }
+  const list = [song, ...songs].slice(0, FAVORITES_MAX)
+  writeLocalSongs(LOCAL_FAVORITES_KEY, list)
+  return { list, favorited: true }
+}
