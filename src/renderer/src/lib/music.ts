@@ -623,6 +623,19 @@ export function joinLocalPlaylist(
   return { list, added: true }
 }
 
+/** 删除单首:从列表与本地存储移除,返回新列表 */
+export function removeFromLocalPlaylist(songs: MusicSong[], song: MusicSong): MusicSong[] {
+  const key = musicSongKey(song)
+  const list = songs.filter((s) => musicSongKey(s) !== key)
+  writeLocalSongs(LOCAL_PLAYLIST_KEY, list)
+  return list
+}
+
+/** 清空播放列表(本地存储同步清空) */
+export function clearLocalPlaylist(): void {
+  writeLocalSongs(LOCAL_PLAYLIST_KEY, [])
+}
+
 /* ---- 收藏 ---- */
 
 export function getLocalFavorites(): MusicSong[] {

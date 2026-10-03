@@ -26,3 +26,6 @@ Thumbs.db
 
 # Debug
 .dbg/
+
+# Agent / spec 工作目录
+.trae/

@@ -63,8 +63,8 @@ export default function MusicPlayerBar({
 }: MusicPlayerBarProps) {
   return (
     <div className="h-24 flex-shrink-0 glass border-t border-[var(--color-border-subtle)] flex items-center px-5 gap-4 relative">
-      {/* 歌曲信息 */}
-      <div className="flex items-center gap-3 w-40 flex-shrink-0">
+      {/* 歌曲信息(加宽以缩短进度条至约 2/3) */}
+      <div className="flex items-center gap-3 w-56 flex-shrink-0">
         <div className="w-12 h-12 overflow-hidden flex-shrink-0 bg-[var(--color-hover-overlay-subtle)] ring-1 ring-white/5 rounded">
           {currentSong ? (
             <SmartImage src={currentSong.cover || currentSong.pic} alt={currentSong.name} className="w-full h-full" />

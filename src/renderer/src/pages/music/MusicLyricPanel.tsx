@@ -1,6 +1,7 @@
 /**
  * 音乐页右侧:两段式面板
- *  - 上段:歌曲封面大图 + [收藏] [加入播放列表](歌名/歌手在底部播放栏已有,此处不重复)
+ *  - 上段:歌曲封面大图 + [收藏](播放的歌曲自动在播放列表中,无需重复加入;
+ *    歌名/歌手在底部播放栏已有,此处不重复)
  *  - 下段:歌词(模糊封面背景 + 卡拉OK高亮 + 设置)
  *
  * 配色全部走主题变量:
@@ -20,7 +21,6 @@ interface MusicLyricPanelProps {
   currentSong: MusicSong | undefined
   isFavorite: boolean
   onToggleFavorite: () => void
-  onAddToPlaylist: () => void
   karaokeMode: boolean
   onToggleKaraoke: () => void
   lyricColor: string
@@ -44,7 +44,6 @@ export default function MusicLyricPanel({
   currentSong,
   isFavorite,
   onToggleFavorite,
-  onAddToPlaylist,
   karaokeMode,
   onToggleKaraoke,
   lyricColor,
@@ -86,7 +85,7 @@ export default function MusicLyricPanel({
           )}
         </div>
 
-        {/* 操作按钮:收藏 / 加入播放列表(歌名/歌手在底部播放栏展示,此处省略) */}
+        {/* 操作按钮:收藏(播放即自动进入播放列表,歌名/歌手在底部播放栏) */}
         <div className="mt-3 flex gap-2">
           <button
             onClick={onToggleFavorite}
@@ -108,15 +107,6 @@ export default function MusicLyricPanel({
           >
             <Icon name={isFavorite ? 'heart' : 'heart-outline'} size={13} />
             {isFavorite ? '已收藏' : '收藏'}
-          </button>
-          <button
-            onClick={onAddToPlaylist}
-            disabled={!currentSong}
-            className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs rounded border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-overlay)] transition-all disabled:opacity-40"
-            title="加入播放列表"
-          >
-            <Icon name="list-plus" size={13} />
-            加入列表
           </button>
         </div>
       </div>
@@ -154,9 +144,16 @@ export default function MusicLyricPanel({
             {/* 卡拉OK开关 */}
             <button
               onClick={onToggleKaraoke}
-              className={`text-[10px] px-2 py-0.5 transition-all rounded ${
-                karaokeMode ? 'bg-primary/20 text-primary ring-1 ring-primary/30' : 'bg-[var(--color-hover-overlay)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]'
-              }`}
+              className="text-[10px] px-2 py-0.5 transition-all rounded bg-[var(--color-hover-overlay)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]"
+              style={
+                karaokeMode
+                  ? {
+                      backgroundColor: withAlpha('var(--color-primary)', 20),
+                      color: 'var(--color-primary)',
+                      boxShadow: `inset 0 0 0 1px ${withAlpha('var(--color-primary)', 30)}`
+                    }
+                  : undefined
+              }
               title="卡拉OK模式"
             >
               KTV

@@ -21,8 +21,22 @@ function isHlsStream(url: string): boolean {
  return /\.m3u8?(\?|$|#)/i.test(url) || url.includes('/proxy/vod/m3u8')
 }
 
-/** 侧边面板类型 */
-type PanelType = 'none' | 'episodes' | 'sources' | 'detail'
+/** 侧边面板类型(选集已移至详情页) */
+type PanelType = 'none' | 'sources' | 'detail'
+
+/** 详情面板选集分页页码序列;页码过多折叠为 1 … (当前±1) … 末页 */
+function buildDetailPanelPageItems(cur: number, total: number): Array<number | 'ellipsis'> {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i)
+  const items: Array<number | 'ellipsis'> = [0]
+  const pushRange = (from: number, to: number) => {
+    for (let i = from; i <= to; i++) items.push(i)
+  }
+  if (cur > 2) items.push('ellipsis')
+  pushRange(Math.max(1, cur - 1), Math.min(total - 2, cur + 1))
+  if (cur < total - 3) items.push('ellipsis')
+  items.push(total - 1)
+  return items
+}
 
 export default function Play() {
  const [searchParams, setSearchParams] = useSearchParams()
@@ -54,6 +68,13 @@ export default function Play() {
 
  // 侧边面板状态
  const [panel, setPanel] = useState<PanelType>('detail')
+
+ /* ---- 详情面板内选集分页 ---- */
+ /** 面板窄(320px),4 列网格,每页 40 集 */
+ const DETAIL_PANEL_PAGE_SIZE = 40
+ const [detailEpPage, setDetailEpPage] = useState(0)
+ /** 用户在面板内手动翻过页(手动后不被自动连播的 index 变化强制拉回) */
+ const detailEpUserPagedRef = useRef(false)
 
  // 开灯/关灯模式已移除
 
@@ -533,34 +554,35 @@ export default function Play() {
  }, [detail, index, source, id, upsertPlayRecord, resolvedStream])
 
  const episodes = detail?.episodes || []
- const total = episodes.length
- const curIdx = Math.min(index, Math.max(0, total - 1))
- const hasPrev = curIdx > 0
- const hasNext = curIdx < total - 1
 
- // 集标题
- const episodeTitle = (i: number) => detail?.episodes_titles?.[i] || `第${i + 1}集`
+ /* ============ 详情面板选集:页序跟随 ============ */
+ // 切换影片(换源/换 id):重置手动标记,页序定位到当前集
+ useEffect(() => {
+ detailEpUserPagedRef.current = false
+ setDetailEpPage(Math.floor(index / DETAIL_PANEL_PAGE_SIZE))
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [source, id])
 
- // 切换集数:更新 URL index(replace 模式,避免污染历史记录)
- const switchEpisode = (delta: number) => {
- const next = curIdx + delta
- if (next < 0 || next >= total) return
- setSearchParams((prev) => {
- const p = new URLSearchParams(prev)
- p.set('index', String(next))
- return p
- }, { replace: true })
- }
+ // 自动连播导致 index 变化:用户未手动翻页时跟随到对应页
+ useEffect(() => {
+ if (detailEpUserPagedRef.current) return
+ setDetailEpPage(Math.floor(index / DETAIL_PANEL_PAGE_SIZE))
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [index, source, id])
 
- // 直接跳转到指定集(replace 模式)
- const jumpToEpisode = (ep: number) => {
- if (ep < 0 || ep >= total) return
+ /** 面板内点击集数:更新 URL index(replace),面板保持打开便于连续选看 */
+ const jumpToEpisodeInPanel = (ep: number) => {
  setSearchParams((prev) => {
  const p = new URLSearchParams(prev)
  p.set('index', String(ep))
  return p
  }, { replace: true })
- setPanel('none')
+ }
+
+ /** 面板内手动翻页 */
+ const gotoDetailEpPage = (p: number) => {
+ detailEpUserPagedRef.current = true
+ setDetailEpPage(p)
  }
 
  // 换源:同步销毁旧播放器后跳转到另一个源
@@ -623,48 +645,9 @@ export default function Play() {
  </div>
  </div>
 
- {/* 中:集数切换 */}
- {total > 0 && (
- <div className="flex items-stretch gap-1 bg-[var(--color-hover-overlay-subtle)] p-1 self-stretch" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
- <button
- onClick={() => switchEpisode(-1)}
- disabled={!hasPrev}
- className="w-8 flex items-center justify-center hover:bg-[var(--color-hover-overlay)] hover:text-[var(--color-text-primary)] disabled:opacity-20 disabled:cursor-not-allowed transition-all duration-150 rounded"
-title="上一集"
- >
- <Icon name="chevron-left" size={16} strokeWidth={2.5} />
- </button>
- <span className="flex items-center text-sm text-[var(--color-text-primary)] min-w-[150px] justify-center">
- <span className="text-white font-medium">{episodeTitle(curIdx)}</span>
- <span className="text-[var(--color-text-quaternary)] ml-2 text-xs">{curIdx + 1}/{total}</span>
- </span>
- <button
- onClick={() => switchEpisode(1)}
- disabled={!hasNext}
- className="w-8 flex items-center justify-center hover:bg-[var(--color-hover-overlay)] hover:text-[var(--color-text-primary)] disabled:opacity-20 disabled:cursor-not-allowed transition-all duration-150 rounded"
-title="下一集"
- >
- <Icon name="chevron-right" size={16} strokeWidth={2.5} />
- </button>
- </div>
- )}
-
  {/* 右:功能按钮 + 窗口控制 */}
  <div className="flex items-stretch gap-2.5 flex-shrink-0 self-stretch" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
  {/* 面板切换按钮组 */}
- {total > 0 && (
- <button
- onClick={() => setPanel(panel === 'episodes' ? 'none' : 'episodes')}
- className={`flex items-center gap-1.5 px-2.5 text-sm transition-all duration-150 rounded ${
- panel === 'episodes'
- ? 'bg-primary text-white'
- : 'bg-[var(--color-hover-overlay-subtle)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover-overlay)]'
- }`}
- >
- <Icon name="grid" size={16} />
- 选集
- </button>
- )}
  <button
  onClick={() => setPanel(panel === 'sources' ? 'none' : 'sources')}
 className={`flex items-center gap-1.5 px-2.5 text-sm transition-all duration-150 rounded ${
@@ -770,7 +753,7 @@ className={`flex items-center gap-1.5 px-2.5 text-sm transition-all duration-150
  )}
  </div>
 
- {/* ============ 侧边面板:选集 / 换源 / 详情 ============ */}
+ {/* ============ 侧边面板:换源 / 详情 ============ */}
  {panel !== 'none' && (
  <aside
  className="flex-shrink-0 overflow-hidden flex flex-col animate-slideInRight ml-px mr-0 mt-0 mb-0 border border-[var(--color-border-default)] shadow-2xl"
@@ -784,20 +767,16 @@ className={`flex items-center gap-1.5 px-2.5 text-sm transition-all duration-150
  {/* 面板标题 */}
  <div className="px-5 py-4 border-b border-[var(--color-border-subtle)] flex items-center justify-between">
  <div className="flex items-center gap-2">
- {panel === 'episodes' ? (
- <Icon name="grid" size={16} className="text-primary" />
- ) : panel === 'sources' ? (
+ {panel === 'sources' ? (
  <Icon name="menu" size={16} className="text-primary" />
  ) : (
  <Icon name="help" size={16} className="text-primary" />
  )}
  <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
- {panel === 'episodes' ? '选集' : panel === 'sources' ? '换源' : '详情'}
+ {panel === 'sources' ? '换源' : '详情'}
  </h3>
  <span className="text-xs text-[var(--color-text-quaternary)]">
- {panel === 'episodes'
- ? `共 ${total} 集`
- : panel === 'sources'
+ {panel === 'sources'
  ? `${sourceList.length} 个源${searchingSources ? ' · 搜索中...' : ''}`
  : '影视信息'}
  </span>
@@ -813,40 +792,6 @@ className={`flex items-center gap-1.5 px-2.5 text-sm transition-all duration-150
 
  {/* 面板内容 */}
  <div className="flex-1 overflow-y-auto p-3">
- {/* 选集面板 */}
- {panel === 'episodes' && (
- <div className="grid grid-cols-3 gap-1.5">
- {episodes.map((_, i) => {
- const isCurrent = i === curIdx
- const isWatched = playRecords[generateStorageKey(source, id)]?.index === i + 1
- return (
- <button
- key={i}
- onClick={() => jumpToEpisode(i)}
- title={episodeTitle(i)}
- className={`relative text-xs py-2 px-1 truncate transition-all duration-200 rounded ${
- isCurrent
- ? 'bg-gradient-to-br from-primary to-red-700 text-white font-semibold shadow-lg shadow-primary/30 ring-2 ring-primary/50'
- : isWatched
- ? 'bg-primary/15 text-primary hover:bg-primary/25 font-medium'
- : 'bg-[var(--color-hover-overlay)] text-[var(--color-text-tertiary)] hover:bg-[var(--color-hover-overlay-strong)] hover:text-white'
- }`}
- >
- {episodeTitle(i)}
- {isCurrent && (
- <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 flex items-center gap-0.5">
- <span className="w-1 h-1 bg-white animate-pulse" />
- </span>
- )}
- {isWatched && !isCurrent && (
- <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-primary" />
- )}
- </button>
- )
- })}
- </div>
- )}
-
  {/* 换源面板 */}
  {panel === 'sources' && (
  <div className="space-y-2">
@@ -931,7 +876,7 @@ className={`flex items-center gap-1.5 px-2.5 text-sm transition-all duration-150
  {detail.title}
  </h4>
  {detail.vod_remarks && (
- <span className="inline-block text-xs bg-primary/15 text-primary px-2 py-0.5 mb-2 w-fit">
+ <span className="inline-block text-xs text-primary px-2 py-0.5 mb-2 w-fit bg-[color-mix(in_srgb,var(--color-primary)_15%,transparent)]">
  {detail.vod_remarks}
  </span>
  )}
@@ -967,6 +912,88 @@ className={`flex items-center gap-1.5 px-2.5 text-sm transition-all duration-150
  </div>
  )}
  </div>
+
+ {/* ============ 选集(平铺 + 分页) ============ */}
+ {episodes.length > 0 && (() => {
+ const epTotal = episodes.length
+ const epTotalPages = Math.max(1, Math.ceil(epTotal / DETAIL_PANEL_PAGE_SIZE))
+ const epSafePage = Math.min(detailEpPage, epTotalPages - 1)
+ const epStart = epSafePage * DETAIL_PANEL_PAGE_SIZE
+ const epPageItems = buildDetailPanelPageItems(epSafePage, epTotalPages)
+ const epTitle = (i: number) => detail.episodes_titles?.[i] || `第${i + 1}集`
+ const panelRecKey = generateStorageKey(source, id)
+ return (
+ <div>
+ {/* 标题行:选集标签 + 分页控件(同一排)+ 右侧统计 */}
+ <div className="flex items-center justify-between gap-2 mb-2">
+ <div className="flex items-center gap-1 min-w-0">
+ <p className="text-xs text-[var(--color-text-secondary)] flex-shrink-0">选集</p>
+ {epTotalPages > 1 && (
+ <div className="flex items-center gap-0.5 flex-shrink-0">
+ <button
+ onClick={() => gotoDetailEpPage(epSafePage - 1)}
+ disabled={epSafePage === 0}
+ className="px-1 py-0.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-overlay)] disabled:opacity-30 disabled:cursor-not-allowed rounded"
+ >
+ <Icon name="chevron-left" size={12} />
+ </button>
+ {epPageItems.map((it, k) =>
+ it === 'ellipsis' ? (
+ <span key={`de-${k}`} className="text-[10px] text-[var(--color-text-quaternary)] px-0.5">…</span>
+ ) : (
+ <button
+ key={it}
+ onClick={() => gotoDetailEpPage(it)}
+ className={`min-w-[20px] px-1 py-0.5 text-[10px] tabular-nums rounded transition-all ${
+ it === epSafePage
+ ? 'bg-primary text-white font-medium'
+ : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-overlay)]'
+ }`}
+ >
+ {it + 1}
+ </button>
+ )
+ )}
+ <button
+ onClick={() => gotoDetailEpPage(epSafePage + 1)}
+ disabled={epSafePage === epTotalPages - 1}
+ className="px-1 py-0.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-overlay)] disabled:opacity-30 disabled:cursor-not-allowed rounded"
+ >
+ <Icon name="chevron-right" size={12} />
+ </button>
+ </div>
+ )}
+ </div>
+ <span className="text-[10px] text-[var(--color-text-quaternary)] flex-shrink-0">
+ 共 {epTotal} 集{epTotalPages > 1 ? ` · ${epSafePage + 1}/${epTotalPages} 页` : ''}
+ </span>
+ </div>
+ <div className="grid grid-cols-4 gap-1">
+ {episodes.slice(epStart, epStart + DETAIL_PANEL_PAGE_SIZE).map((_, pi) => {
+ const i = epStart + pi
+ const isCurrent = i === index
+ const isWatched = playRecords[panelRecKey]?.index === i + 1
+ return (
+ <button
+ key={i}
+ onClick={() => jumpToEpisodeInPanel(i)}
+ title={epTitle(i)}
+ className={`relative text-[10px] py-1.5 px-0.5 truncate transition-all rounded ${
+ isCurrent
+ ? 'bg-gradient-to-br from-primary to-red-700 text-white font-semibold'
+ : isWatched
+ ? 'text-primary bg-[color-mix(in_srgb,var(--color-primary)_12%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-primary)_22%,transparent)]'
+ : 'text-[var(--color-text-tertiary)] bg-[var(--color-hover-overlay)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover-overlay-strong)]'
+ }`}
+ >
+ {epTitle(i)}
+ </button>
+ )
+ })}
+ </div>
+ </div>
+ )
+ })()}
 
  {/* 标签信息 */}
  {(detail.type_name || detail.class) && (

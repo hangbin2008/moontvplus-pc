@@ -5,7 +5,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore, sortedPlayRecords } from '../lib/store'
-import { clearPlayRecords } from '../lib/api'
 import { formatRelativeTime, buildPlayUrl, calcProgress } from '../lib/utils'
 import Icon from '../components/Icon'
 import MediaCard from '../components/MediaCard'
@@ -24,7 +23,7 @@ function getEpisodeText(record: PlayRecord): string {
 
 export default function History() {
   const navigate = useNavigate()
-  const { playRecords, removePlayRecord, loadPlayRecords } = useStore()
+  const { playRecords, removePlayRecord, clearPlayRecords } = useStore()
 
   // 搜索关键字
   const [keyword, setKeyword] = useState('')
@@ -80,7 +79,6 @@ export default function History() {
     setClearing(true)
     try {
       await clearPlayRecords()
-      await loadPlayRecords()
     } catch (e) {
       console.error('清空观看记录失败', e)
     } finally {

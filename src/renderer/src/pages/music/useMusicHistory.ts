@@ -1,10 +1,11 @@
 /**
- * 音乐页「播放列表 + 我的收藏」hook(本地优先)
+ * 音乐页「播放列表」hook(本地优先)
  *
  * - 播放列表:本地 localStorage 持久化(无服务器或自定义 lxserver 模式也可用);
  *   本地为空时回退服务端 /api/music/v2/history 并回填本地
- * - 收藏:本地 localStorage(服务端无音乐收藏接口)
- * - view:当前左侧列表视图('playlist' | 'favorites' | 'none')
+ * - 收藏:本地 localStorage(服务端无音乐收藏接口),仅作为歌曲上的♥标识集合,
+ *   不再有独立的收藏列表视图
+ * - view:当前左侧列表视图('playlist' | 'none')
  */
 import { useCallback, useEffect, useState } from 'react'
 import {
@@ -14,16 +15,19 @@ import {
   getLocalFavorites,
   addToLocalPlaylist,
   joinLocalPlaylist,
+  removeFromLocalPlaylist,
+  clearLocalPlaylist,
   isFavoriteSong,
   toggleFavoriteSong,
   writeLocalPlaylistBulk,
   type MusicSong
 } from '../../lib/music'
 
-export type MusicLibraryView = 'playlist' | 'favorites' | 'none'
+export type MusicLibraryView = 'playlist' | 'none'
 
 export function useMusicHistory() {
   const [playlistSongs, setPlaylistSongs] = useState<MusicSong[]>([])
+  /** 收藏标记集合(仅用于判断 isFavorite) */
   const [favoriteSongs, setFavoriteSongs] = useState<MusicSong[]>([])
   const [view, setView] = useState<MusicLibraryView>('none')
   /** 初次加载是否完成(启动自动播放依赖) */
@@ -73,7 +77,18 @@ export function useMusicHistory() {
     return added
   }, [])
 
-  /* ============ 收藏 ============ */
+  /** 删除单首(本地持久化) */
+  const removePlaylistSong = useCallback((song: MusicSong) => {
+    setPlaylistSongs((prev) => removeFromLocalPlaylist(prev, song))
+  }, [])
+
+  /** 清空播放列表(本地持久化) */
+  const clearPlaylist = useCallback(() => {
+    clearLocalPlaylist()
+    setPlaylistSongs([])
+  }, [])
+
+  /* ============ 收藏(仅标识) ============ */
 
   const isFavorite = useCallback(
     (song: MusicSong | undefined): boolean => (song ? isFavoriteSong(favoriteSongs, song) : false),
@@ -94,11 +109,12 @@ export function useMusicHistory() {
   return {
     loaded,
     playlistSongs,
-    favoriteSongs,
     view,
     setView,
     upsertPlaylistSong,
     joinPlaylist,
+    removePlaylistSong,
+    clearPlaylist,
     isFavorite,
     toggleFavorite
   }

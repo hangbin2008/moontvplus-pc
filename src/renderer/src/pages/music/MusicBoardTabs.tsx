@@ -1,5 +1,5 @@
 /**
- * 音乐页「我的收藏 / 播放列表 / 榜单」标签行(非搜索模式下显示)
+ * 音乐页「播放列表 / 榜单」标签行(非搜索模式下显示)
  */
 import Icon from '../../components/Icon'
 import type { MusicBoard } from './types'
@@ -10,9 +10,7 @@ interface MusicBoardTabsProps {
   currentBoardId: string
   view: MusicLibraryView
   playlistCount: number
-  favoriteCount: number
   onSelectPlaylist: () => void
-  onSelectFavorites: () => void
   onSelectBoard: (boardId: string) => void
 }
 
@@ -21,23 +19,11 @@ export default function MusicBoardTabs({
   currentBoardId,
   view,
   playlistCount,
-  favoriteCount,
   onSelectPlaylist,
-  onSelectFavorites,
   onSelectBoard
 }: MusicBoardTabsProps) {
   return (
     <div className="flex-shrink-0 px-5 py-2 flex items-center gap-1.5 overflow-x-auto border-b border-[var(--color-border-subtle)] scrollbar-thin">
-      {/* 我的收藏 */}
-      <button
-        onClick={onSelectFavorites}
-        className={`flex-shrink-0 flex items-center gap-1 ${view === 'favorites' ? 'chip chip-active' : 'chip'}`}
-      >
-        <Icon name="heart-outline" size={15} className="inline-block" /> 我的收藏
-        {favoriteCount > 0 && (
-          <span className={`text-[10px] ${view === 'favorites' ? 'opacity-70' : 'text-[var(--color-text-quaternary)]'}`}>{favoriteCount}</span>
-        )}
-      </button>
       {/* 播放列表 */}
       <button
         onClick={onSelectPlaylist}

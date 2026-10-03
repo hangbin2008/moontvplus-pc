@@ -427,6 +427,48 @@ export function useMusicPlayer({ audioCtxRef, initVisualizer, upsertPlaylistSong
     seekToClientX(e.clientX)
   }
 
+  /** 停止播放并复位状态(删除当前歌曲/清空列表时调用) */
+  const stopPlay = () => {
+    const audio = audioRef.current
+    if (audio) {
+      audio.pause()
+      audio.removeAttribute('src')
+      audio.load()
+    }
+    // 必须同步清空队列:否则播放栏上一首/下一首/onEnded 仍能播放已删除的歌,
+    // 播放成功后经 upsertPlaylistSong 把歌曲重新写回列表造成"复活"
+    setPlaylist([])
+    setIsPlaying(false)
+    setCurrentIndex(-1)
+    setCurrentTime(0)
+    setDuration(0)
+    setPlayError('')
+    setLyricData(null)
+  }
+
+  /**
+   * 从播放队列移除单首(播放列表删除非当前歌曲时同步队列)。
+   * 删除当前播放项应由 stopPlay 处理;此处返回是否命中。
+   */
+  const removeSongFromQueue = (song: MusicSong): boolean => {
+    const list = playlistRef.current
+    const idx = list.findIndex(
+      (s) => s.source === song.source && s.songId === song.songId
+    )
+    if (idx < 0) return false
+    const next = list.slice()
+    next.splice(idx, 1)
+    setPlaylist(next)
+    // 删除项在当前歌曲之前时,当前索引前移,避免播错/错位
+    const cur = currentIndexRef.current
+    if (idx < cur) {
+      const ci = cur - 1
+      setCurrentIndex(ci)
+      currentIndexRef.current = ci
+    }
+    return true
+  }
+
   // 全局拖动监听(拖动期间持续 seek)
   useEffect(() => {
     if (!isDragging) return
@@ -456,6 +498,8 @@ export function useMusicPlayer({ audioCtxRef, initVisualizer, upsertPlaylistSong
     progressBarRef,
     handlePlaySong,
     startPlaylist,
+    stopPlay,
+    removeSongFromQueue,
     togglePlay,
     playPrev,
     playNext,

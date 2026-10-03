@@ -3,7 +3,7 @@
  * 展示影视详情、剧集列表,支持收藏与"继续观看"
  * 路由参数:source, id, title
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { getDetail, getFavorite } from '../lib/api'
 import { processImageUrl } from '../lib/image'
@@ -13,6 +13,23 @@ import { getDetailWithCache, cacheSearchResult } from '../lib/searchCache'
 import Icon from '../components/Icon'
 import SmartImage from '../components/SmartImage'
 import { generateStorageKey, type Favorite, type SearchResult } from '../types'
+
+/** 选集分页页码序列;页码过多时折叠为 1 … (当前±1) … 末页 */
+function buildPageItems(cur: number, total: number): Array<number | 'ellipsis'> {
+  if (total <= 9) return Array.from({ length: total }, (_, i) => i)
+  const items: Array<number | 'ellipsis'> = [0]
+  const pushRange = (from: number, to: number) => {
+    for (let i = from; i <= to; i++) items.push(i)
+  }
+  if (cur > 2) items.push('ellipsis')
+  pushRange(Math.max(1, cur - 1), Math.min(total - 2, cur + 1))
+  if (cur < total - 3) items.push('ellipsis')
+  items.push(total - 1)
+  return items
+}
+
+/** 选集网格每页集数;超出后分页展示 */
+const EPISODES_PAGE_SIZE = 50
 
 export default function Detail() {
   const [searchParams] = useSearchParams()
@@ -31,6 +48,8 @@ export default function Detail() {
   const [detail, setDetail] = useState<SearchResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  /** 选集分页当前页(0 基) */
+  const [page, setPage] = useState(0)
   const [favorited, setFavorited] = useState<boolean>(
     () => !!useStore.getState().favorites[key]
   )
@@ -65,6 +84,28 @@ export default function Detail() {
     }
   }, [source, id, key])
 
+  /** 用户是否手动翻过页(手动后不再被记录更新覆盖定位) */
+  const userPagedRef = useRef(false)
+
+  /* 切换 source/id 时:重置手动标记,按当前已知记录定位页,否则第 1 页 */
+  useEffect(() => {
+    userPagedRef.current = false
+    const rec = playRecords[generateStorageKey(source, id)]
+    const li = rec ? rec.index - 1 : -1
+    setPage(li >= 0 ? Math.floor(li / EPISODES_PAGE_SIZE) : 0)
+    // 仅在影片切换时重置;playRecords 只取本次值,不作为重跑依赖
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, id])
+
+  /* 记录晚到(直接刷新详情页、store 尚未加载完成):用户未翻页时补一次定位 */
+  useEffect(() => {
+    if (userPagedRef.current) return
+    const rec = playRecords[generateStorageKey(source, id)]
+    if (!rec) return
+    setPage(Math.floor((rec.index - 1) / EPISODES_PAGE_SIZE))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, id, playRecords])
+
   const record = playRecords[key]
   const lastIndex = record ? record.index - 1 : -1
 
@@ -94,6 +135,12 @@ export default function Detail() {
     navigate(buildPlayUrl(source, id, title, index))
   }
 
+  /** 用户主动翻页(上一页/下一页/页码):标记后不再被记录更新自动覆盖 */
+  const gotoPage = (p: number) => {
+    userPagedRef.current = true
+    setPage(p)
+  }
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 animate-fadeIn">
@@ -119,6 +166,12 @@ export default function Detail() {
 
   const episodes = detail.episodes || []
   const episodeTitle = (i: number) => detail.episodes_titles?.[i] || `第${i + 1}集`
+
+  const totalPages = Math.max(1, Math.ceil(episodes.length / EPISODES_PAGE_SIZE))
+  const safePage = Math.min(page, totalPages - 1)
+  const pageStart = safePage * EPISODES_PAGE_SIZE
+  const pageEpisodes = episodes.slice(pageStart, pageStart + EPISODES_PAGE_SIZE)
+  const pageItems = buildPageItems(safePage, totalPages)
 
   return (
     <div className="animate-fadeIn">
@@ -214,7 +267,7 @@ export default function Detail() {
                 onClick={toggleFavorite}
                 className={`px-5 py-2.5 transition-all font-medium border flex items-center gap-2 rounded ${
                   favorited
-                    ? 'bg-primary/15 text-primary border-primary/40 hover:bg-primary/25 hover:border-primary/60'
+                    ? 'text-primary border-[color-mix(in_srgb,var(--color-primary)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-primary)_15%,transparent)] hover:border-[color-mix(in_srgb,var(--color-primary)_60%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-primary)_25%,transparent)]'
                     : 'bg-[var(--color-hover-overlay)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)] hover:bg-[var(--color-hover-overlay-strong)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-default)]'
                 }`}
               >
@@ -247,7 +300,7 @@ export default function Detail() {
           </div>
         )}
 
-        {/* 剧集列表 */}
+        {/* 剧集列表(平铺 + 分页) */}
         {episodes.length > 0 && (
           <div>
             <div className="flex items-center gap-2 mb-3">
@@ -257,10 +310,16 @@ export default function Detail() {
                 <span className="text-[var(--color-text-quaternary)] font-normal">
                   共 {episodes.length} 集
                 </span>
+                {totalPages > 1 && (
+                  <span className="text-[var(--color-text-quaternary)] font-normal">
+                    · 第 {safePage + 1}/{totalPages} 页
+                  </span>
+                )}
               </h2>
             </div>
             <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-10 gap-2">
-              {episodes.map((_, i) => {
+              {pageEpisodes.map((_, pi) => {
+                const i = pageStart + pi
                 const isLast = i === lastIndex
                 return (
                   <button
@@ -269,7 +328,7 @@ export default function Detail() {
                     title={episodeTitle(i)}
                     className={`text-sm py-2.5 px-2 truncate transition-all border rounded ${
                       isLast
-                        ? 'bg-gradient-to-r from-primary to-red-700 text-white font-medium shadow-lg shadow-primary/30 border-primary/50'
+                        ? 'bg-gradient-to-r from-primary to-red-700 text-white font-medium border-[color-mix(in_srgb,var(--color-primary)_50%,transparent)] shadow-[0_10px_24px_-8px_color-mix(in_srgb,var(--color-primary)_50%,transparent)]'
                         : 'bg-[var(--color-card-bg)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)] hover:bg-[var(--color-card-hover)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-default)] hover:-translate-y-0.5'
                     }`}
                   >
@@ -278,6 +337,45 @@ export default function Detail() {
                 )
               })}
             </div>
+
+            {/* 分页栏:上一页 + 页码(多页折叠)+ 下一页 */}
+            {totalPages > 1 && (
+              <div className="mt-4 flex items-center justify-center gap-1.5 flex-wrap">
+                <button
+                  onClick={() => gotoPage(safePage - 1)}
+                  disabled={safePage === 0}
+                  className="px-2.5 py-1 text-xs border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] rounded hover:bg-[var(--color-hover-overlay)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                  上一页
+                </button>
+                {pageItems.map((it, k) =>
+                  it === 'ellipsis' ? (
+                    <span key={`e-${k}`} className="px-1 text-[var(--color-text-quaternary)]">
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={it}
+                      onClick={() => gotoPage(it)}
+                      className={`min-w-[30px] px-1.5 py-1 text-xs tabular-nums border rounded transition-all ${
+                        it === safePage
+                          ? 'bg-primary text-white border-primary font-medium'
+                          : 'border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-overlay)]'
+                      }`}
+                    >
+                      {it + 1}
+                    </button>
+                  )
+                )}
+                <button
+                  onClick={() => gotoPage(safePage + 1)}
+                  disabled={safePage === totalPages - 1}
+                  className="px-2.5 py-1 text-xs border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] rounded hover:bg-[var(--color-hover-overlay)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                  下一页
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

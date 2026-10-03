@@ -23,6 +23,15 @@ import {
 import { clearHomeCache } from '../lib/homeCache'
 import { clearImageCache } from '../lib/image'
 import { clearSearchCache } from '../lib/searchCache'
+import {
+  getLocalPlayRecords,
+  setLocalPlayRecord,
+  removeLocalPlayRecord,
+  clearLocalPlayRecords,
+  getLocalFavorites,
+  setLocalFavorite,
+  removeLocalFavorite
+} from '../lib/localRecords'
 
 interface AppState {
   /* 认证 */
@@ -50,6 +59,7 @@ interface AppState {
   /* 数据操作 */
   upsertPlayRecord: (source: string, id: string, record: PlayRecord) => Promise<void>
   removePlayRecord: (key: string) => Promise<void>
+  clearPlayRecords: () => Promise<void>
   upsertFavorite: (key: string, favorite: FavoriteMap[string]) => Promise<void>
   removeFavorite: (key: string) => Promise<void>
 }
@@ -74,6 +84,12 @@ export const useStore = create<AppState>((set, get) => ({
         set({ isAuthed: true, auth: getAuth(), baseUrl: getBaseUrl() })
         await get().loadServerConfig()
         await Promise.all([get().loadPlayRecords(), get().loadFavorites()])
+      } else {
+        // 自定义源(无服务器)模式:加载本地持久化的记录与收藏
+        set({
+          playRecords: getLocalPlayRecords(),
+          favorites: getLocalFavorites()
+        })
       }
     } finally {
       _initializing = false
@@ -98,12 +114,14 @@ export const useStore = create<AppState>((set, get) => ({
     clearHomeCache()
     void clearImageCache()
     clearSearchCache()
+    // 回到自定义源模式:store 切换为本地持久化数据
     set({
       isAuthed: false,
       auth: null,
       serverConfig: null,
-      playRecords: {},
-      favorites: {}
+      baseUrl: '',
+      playRecords: getLocalPlayRecords(),
+      favorites: getLocalFavorites()
     })
   },
 
@@ -117,6 +135,10 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   loadPlayRecords: async () => {
+    if (!get().isAuthed) {
+      set({ playRecords: getLocalPlayRecords() })
+      return
+    }
     try {
       const records = await api.getPlayRecords()
       set({ playRecords: records })
@@ -126,6 +148,10 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   loadFavorites: async () => {
+    if (!get().isAuthed) {
+      set({ favorites: getLocalFavorites() })
+      return
+    }
     try {
       const favs = await api.getFavorites()
       set({ favorites: favs })
@@ -136,6 +162,12 @@ export const useStore = create<AppState>((set, get) => ({
 
   upsertPlayRecord: async (source, id, record) => {
     const key = `${source}+${id}`
+    // 自定义源(无服务器)模式:直接本地持久化,不做回滚
+    if (!get().isAuthed) {
+      set((s) => ({ playRecords: { ...s.playRecords, [key]: record } }))
+      setLocalPlayRecord(key, record)
+      return
+    }
     const prev = get().playRecords[key]
     // 乐观更新
     set((s) => ({ playRecords: { ...s.playRecords, [key]: record } }))
@@ -157,6 +189,15 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   removePlayRecord: async (key) => {
+    if (!get().isAuthed) {
+      set((s) => {
+        const next = { ...s.playRecords }
+        delete next[key]
+        return { playRecords: next }
+      })
+      removeLocalPlayRecord(key)
+      return
+    }
     const prev = get().playRecords[key]
     set((s) => {
       const next = { ...s.playRecords }
@@ -174,7 +215,26 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
+  clearPlayRecords: async () => {
+    if (!get().isAuthed) {
+      set({ playRecords: {} })
+      clearLocalPlayRecords()
+      return
+    }
+    try {
+      await api.clearPlayRecords()
+      set({ playRecords: {} })
+    } catch (e) {
+      console.error('clearPlayRecords', e)
+    }
+  },
+
   upsertFavorite: async (key, favorite) => {
+    if (!get().isAuthed) {
+      set((s) => ({ favorites: { ...s.favorites, [key]: favorite } }))
+      setLocalFavorite(key, favorite)
+      return
+    }
     const prev = get().favorites[key]
     set((s) => ({ favorites: { ...s.favorites, [key]: favorite } }))
     try {
@@ -195,6 +255,15 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   removeFavorite: async (key) => {
+    if (!get().isAuthed) {
+      set((s) => {
+        const next = { ...s.favorites }
+        delete next[key]
+        return { favorites: next }
+      })
+      removeLocalFavorite(key)
+      return
+    }
     const prev = get().favorites[key]
     set((s) => {
       const next = { ...s.favorites }

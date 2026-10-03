@@ -83,28 +83,51 @@ export default function Music() {
   const displayList =
     history.view === 'playlist'
       ? history.playlistSongs
-      : history.view === 'favorites'
-      ? history.favoriteSongs
       : isSearchMode
       ? search.searchResults
       : boards.boardSongs
   const currentSong = player.currentIndex >= 0 ? player.playlist[player.currentIndex] : undefined
   const progressRatio = player.duration > 0 ? player.currentTime / player.duration : 0
 
-  /* ============ 收藏 / 加入播放列表(带反馈) ============ */
+  /* ============ 收藏(带反馈) ============ */
   const handleToggleFavorite = () => {
     if (!currentSong) return
     const fav = history.toggleFavorite(currentSong)
     toast[fav ? 'success' : 'info'](fav ? `已收藏《${currentSong.name}》` : `已取消收藏《${currentSong.name}》`)
   }
 
-  const handleAddToPlaylist = () => {
-    if (!currentSong) return
-    const added = history.joinPlaylist(currentSong)
-    toast[added ? 'success' : 'info'](
-      added ? `已加入播放列表` : '该歌曲已在播放列表中'
-    )
+  /* ============ 从播放列表移除 ============ */
+  const handleRemoveSong = (song: Parameters<typeof history.removePlaylistSong>[0]) => {
+    const isCurrent =
+      !!currentSong && currentSong.songId === song.songId && currentSong.source === song.source
+    history.removePlaylistSong(song)
+    if (isCurrent) {
+      // 删当前歌曲:停止播放并清空队列
+      player.stopPlay()
+    } else {
+      // 非当前歌曲:同步移除队列项,防止播放队列与列表错位
+      player.removeSongFromQueue(song)
+    }
+    toast.info(`已从播放列表移除《${song.name}》`)
   }
+
+  /* ============ 清空播放列表 ============ */
+  const handleClearPlaylist = () => {
+    history.clearPlaylist()
+    player.stopPlay()
+    toast.success('播放列表已清空')
+  }
+
+  /** 判断两首歌是否同一首(用于滚动定位) */
+  const currentSongKey = currentSong ? `${currentSong.source}::${currentSong.songId}` : ''
+
+  /* ============ 播放列表视图:当前歌曲行滚动到可视区 ============ */
+  useEffect(() => {
+    if (history.view !== 'playlist' || !currentSongKey) return
+    const safeKey = window.CSS?.escape ? window.CSS.escape(currentSongKey) : currentSongKey
+    const row = document.querySelector(`[data-song-key="${safeKey}"]`)
+    row?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [history.view, currentSongKey])
 
   /* ============ 启动时优先播放播放列表中的音乐 ============ */
   const didStartupRef = useRef(false)
@@ -142,9 +165,7 @@ export default function Music() {
           currentBoardId={boards.currentBoardId}
           view={history.view}
           playlistCount={history.playlistSongs.length}
-          favoriteCount={history.favoriteSongs.length}
           onSelectPlaylist={() => { history.setView('playlist'); boards.setCurrentBoardId('') }}
-          onSelectFavorites={() => { history.setView('favorites'); boards.setCurrentBoardId('') }}
           onSelectBoard={(id) => { boards.handleBoardChange(id); history.setView('none') }}
         />
       )}
@@ -161,11 +182,13 @@ export default function Music() {
           searchCount={search.searchResults.length}
           view={history.view}
           playlistCount={history.playlistSongs.length}
-          favoriteCount={history.favoriteSongs.length}
           boardCount={boards.boardSongs.length}
           currentSong={currentSong}
           isPlaying={player.isPlaying}
           onPlaySong={player.handlePlaySong}
+          isFavoriteSong={history.isFavorite}
+          onRemoveSong={handleRemoveSong}
+          onClearPlaylist={handleClearPlaylist}
           hasMore={search.hasMore}
           loadingMore={search.loadingMore}
           onLoadMore={() => void search.loadMore()}
@@ -176,7 +199,6 @@ export default function Music() {
           currentSong={currentSong}
           isFavorite={history.isFavorite(currentSong)}
           onToggleFavorite={handleToggleFavorite}
-          onAddToPlaylist={handleAddToPlaylist}
           karaokeMode={lyric.karaokeMode}
           onToggleKaraoke={() => lyric.setKaraokeMode(!lyric.karaokeMode)}
           lyricColor={lyric.lyricColor}
